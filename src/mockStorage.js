@@ -20,12 +20,12 @@ const mockStorage = {
 
 // Initialize with sample data if empty
 if (Object.keys(mockStorage.data).length === 0) {
-  mockStorage.set('project:1', JSON.stringify({
+  const sampleProject = {
     id: '1',
-    name: 'Sample Highway Project',
-    contractor: 'PT Jaya Konstruksi',
-    supervisor: 'Ir. Budi Santoso',
-    contractPrice: 5000000000,
+    name: 'Highway Reconstruction Project',
+    contractor: 'PT Jaya Konstruksi Indonesia',
+    supervisor: 'Ir. Budi Santoso, M.Eng',
+    contractPrice: 15000000000,
     workType: 'flexible-pavement',
     roadHierarchy: 'JAS',
     maintenanceType: 'reconstruction',
@@ -35,20 +35,20 @@ if (Object.keys(mockStorage.data).length === 0) {
       {
         id: '1',
         description: 'Asphalt Concrete Wearing Course',
-        quantity: 10000,
+        quantity: 25000,
         unit: 'm²',
-        unitPrice: 150000,
-        total: 1500000000,
-        completed: 3500
+        unitPrice: 185000,
+        total: 4625000000,
+        completed: 12500
       },
       {
         id: '2',
         description: 'Base Course Aggregate',
-        quantity: 12000,
+        quantity: 18000,
         unit: 'm³',
-        unitPrice: 250000,
-        total: 3000000000,
-        completed: 8000
+        unitPrice: 275000,
+        total: 4950000000,
+        completed: 9500
       }
     ],
     weeklyReports: [
@@ -56,28 +56,30 @@ if (Object.keys(mockStorage.data).length === 0) {
         id: '101',
         weekNumber: 1,
         date: '2024-01-20',
-        notes: 'Mobilization and site preparation',
+        notes: 'Mobilization and site preparation completed',
         workItems: [
-          { boqItemId: '1', qtyCompleted: 500 },
-          { boqItemId: '2', qtyCompleted: 1000 }
+          { boqItemId: '1', qtyCompleted: 1500 },
+          { boqItemId: '2', qtyCompleted: 2000 }
         ],
-        weekProgress: 5.25,
-        cumulativeProgress: 5.25
+        weekProgress: 8.5,
+        cumulativeProgress: 8.5
       },
       {
         id: '102',
         weekNumber: 2,
         date: '2024-01-27',
-        notes: 'Earthworks and foundation',
+        notes: 'Earthworks and foundation preparation',
         workItems: [
-          { boqItemId: '1', qtyCompleted: 1000 },
-          { boqItemId: '2', qtyCompleted: 2000 }
+          { boqItemId: '1', qtyCompleted: 3000 },
+          { boqItemId: '2', qtyCompleted: 2500 }
         ],
-        weekProgress: 7.5,
-        cumulativeProgress: 12.75
+        weekProgress: 12.3,
+        cumulativeProgress: 20.8
       }
     ]
-  }));
+  };
+  
+  mockStorage.set('project:1', JSON.stringify(sampleProject));
 }
 
 window.storage = mockStorage;
