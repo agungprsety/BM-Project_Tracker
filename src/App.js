@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Plus, Edit2, Trash2, Save, X, BarChart3, LineChart, Download, Calendar, Users, DollarSign, ChevronRight, CheckCircle, AlertCircle, Building, HardHat, FileText, TrendingUp, Clock, Target, ChevronLeft } from 'lucide-react';
-import { BarChart, Bar, LineChart as RechartsLine, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, AreaChart } from 'recharts';
+import { BarChart, Bar, LineChart as RechartsLine, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 // ========== UTILITIES ==========
 const formatCurrency = (amount) => {
@@ -38,38 +38,6 @@ const getStatusText = (progress) => {
   if (progress >= 50) return 'On Track';
   if (progress >= 30) return 'Delayed';
   return 'Critical';
-};
-
-const calculateWeekProgress = (workItems, project) => {
-  const boq = project.boq || [];
-  const totalValue = Number(project.contractPrice) || boq.reduce((s, i) => s + i.total, 0);
-  
-  if (totalValue === 0) return 0;
-
-  let weekProgress = 0;
-  workItems.forEach(wi => {
-    const boqItem = boq.find(b => b.id === wi.boqItemId);
-    if (boqItem && wi.qtyCompleted) {
-      const itemValue = Number(wi.qtyCompleted) * boqItem.unitPrice;
-      weekProgress += (itemValue / totalValue) * 100;
-    }
-  });
-
-  return weekProgress;
-};
-
-const updateBoqWithWorkItems = (boq, workItems) => {
-  const updatedBoq = [...boq];
-  updatedBoq.forEach(b => b.completed = 0);
-  
-  workItems.forEach(wi => {
-    const boqItem = updatedBoq.find(b => b.id === wi.boqItemId);
-    if (boqItem && wi.qtyCompleted) {
-      boqItem.completed = (boqItem.completed || 0) + Number(wi.qtyCompleted);
-    }
-  });
-  
-  return updatedBoq;
 };
 
 // ========== STORAGE SERVICE ==========
@@ -115,8 +83,8 @@ const storageService = {
 // ========== COMPONENTS ==========
 
 const Nav = ({ view, setView }) => (
-  <nav className="bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-xl">
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+  <nav className="bg-gradient-to-r from-blue-600 to-blue-900 text-white shadow-xl">
+    <div className="container">
       <div className="flex justify-between items-center h-16">
         <div className="flex items-center space-x-3">
           <div className="bg-white p-2 rounded-lg">
@@ -233,7 +201,7 @@ const ProjectForm = ({ existing, onSave, onCancel }) => {
   ];
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="max-w-6xl mx-auto p-4">
       <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-200">
         <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-8 py-6">
           <div className="flex items-center justify-between">
@@ -322,7 +290,9 @@ const StatCard = ({ title, value, icon, trend, trendText, color }) => (
         )}
       </div>
       <div className={`p-3 rounded-xl ${color || 'bg-blue-50'}`}>
-        {React.cloneElement(icon, { className: `h-6 w-6 ${color?.includes('blue') ? 'text-blue-600' : color?.includes('green') ? 'text-green-600' : color?.includes('orange') ? 'text-orange-600' : 'text-blue-600'}` })}
+        {React.cloneElement(icon, { 
+          className: `h-6 w-6 ${color?.includes('blue') ? 'text-blue-600' : color?.includes('green') ? 'text-green-600' : color?.includes('orange') ? 'text-orange-600' : 'text-blue-600'}` 
+        })}
       </div>
     </div>
   </div>
@@ -470,7 +440,7 @@ const SummaryView = ({ projects, onViewDetail, onDeleteProject }) => {
   );
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="container">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Dashboard Overview</h1>
         <p className="text-gray-600 mt-2">Monitor all your construction projects in one place</p>
@@ -533,13 +503,11 @@ const SummaryView = ({ projects, onViewDetail, onDeleteProject }) => {
                     yAxisId="left"
                     domain={[0, 100]} 
                     stroke="#666"
-                    label={{ value: 'Progress %', angle: -90, position: 'insideLeft', offset: -10 }}
                   />
                   <YAxis 
                     yAxisId="right" 
                     orientation="right"
                     stroke="#666"
-                    label={{ value: 'Value (B)', angle: 90, position: 'insideRight', offset: -10 }}
                   />
                   <Tooltip 
                     formatter={(value, name) => {
@@ -547,36 +515,21 @@ const SummaryView = ({ projects, onViewDetail, onDeleteProject }) => {
                       if (name === 'value') return [`${value} Billion IDR`, 'Value'];
                       return [value, name];
                     }}
-                    contentStyle={{ 
-                      borderRadius: '12px',
-                      border: '1px solid #e5e7eb',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                    }}
                   />
                   <Bar 
                     yAxisId="left"
                     dataKey="progress" 
-                    fill="url(#progressGradient)" 
+                    fill="#3b82f6" 
                     name="Progress %"
                     radius={[4, 4, 0, 0]}
                   />
                   <Bar 
                     yAxisId="right"
                     dataKey="value" 
-                    fill="url(#valueGradient)" 
+                    fill="#10b981" 
                     name="Value (Billion IDR)"
                     radius={[4, 4, 0, 0]}
                   />
-                  <defs>
-                    <linearGradient id="progressGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
-                      <stop offset="95%" stopColor="#1d4ed8" stopOpacity={1}/>
-                    </linearGradient>
-                    <linearGradient id="valueGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
-                      <stop offset="95%" stopColor="#059669" stopOpacity={1}/>
-                    </linearGradient>
-                  </defs>
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -683,12 +636,11 @@ const SummaryView = ({ projects, onViewDetail, onDeleteProject }) => {
   );
 };
 
-// Simplified Detail View for now (to fix build)
 const ProjectDetailView = ({ project, onEdit, onDelete, onUpdate, onBack }) => {
   const progress = calculateProjectProgress(project);
   
   return (
-    <div className="max-w-6xl mx-auto px-4">
+    <div className="container">
       <div className="mb-6">
         <button
           onClick={onBack}
@@ -884,7 +836,7 @@ export default function App() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
         <Nav view={view} setView={setView} />
-        <div className="max-w-7xl mx-auto px-4 py-12">
+        <div className="container py-12">
           <div className="animate-pulse space-y-8">
             <div className="h-8 bg-gray-200 rounded w-64 mb-6"></div>
             <div className="grid grid-cols-4 gap-6 mb-8">
