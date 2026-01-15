@@ -1,894 +1,527 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Plus, Edit2, Trash2, Save, X, BarChart3, LineChart, Download, Calendar, Users, DollarSign, ChevronRight, CheckCircle, AlertCircle, Building, HardHat, FileText, TrendingUp, Clock, Target, ChevronLeft } from 'lucide-react';
-import { BarChart, Bar, LineChart as RechartsLine, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import React, { useState, useEffect } from 'react';
+import { Plus, Edit2, Trash2, Save, X } from 'lucide-react';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
-// ========== UTILITIES ==========
-const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    minimumFractionDigits: 0
-  }).format(amount);
-};
-
-const formatDate = (dateString) => {
-  return new Date(dateString).toLocaleDateString('id-ID', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric'
-  });
-};
-
-const calculateProjectProgress = (project) => {
-  if (!project?.weeklyReports?.length) return 0;
-  return project.weeklyReports[project.weeklyReports.length - 1].cumulativeProgress || 0;
-};
-
-const getStatusColor = (progress) => {
-  if (progress >= 90) return 'text-green-600 bg-green-50';
-  if (progress >= 70) return 'text-blue-600 bg-blue-50';
-  if (progress >= 50) return 'text-yellow-600 bg-yellow-50';
-  if (progress >= 30) return 'text-orange-600 bg-orange-50';
-  return 'text-red-600 bg-red-50';
-};
-
-const getStatusText = (progress) => {
-  if (progress >= 90) return 'Excellent';
-  if (progress >= 70) return 'Good';
-  if (progress >= 50) return 'On Track';
-  if (progress >= 30) return 'Delayed';
-  return 'Critical';
-};
-
-// ========== STORAGE SERVICE ==========
-const storageService = {
-  list: async (prefix) => {
-    try {
-      return await window.storage.list(prefix);
-    } catch (error) {
-      console.error('Storage list error:', error);
-      return { keys: [] };
-    }
-  },
-  
-  get: async (key) => {
-    try {
-      const result = await window.storage.get(key);
-      return result ? JSON.parse(result.value) : null;
-    } catch (error) {
-      console.error('Storage get error:', error);
-      return null;
-    }
-  },
-  
-  set: async (key, value) => {
-    try {
-      await window.storage.set(key, JSON.stringify(value));
-    } catch (error) {
-      console.error('Storage set error:', error);
-      throw error;
-    }
-  },
-  
-  delete: async (key) => {
-    try {
-      await window.storage.delete(key);
-    } catch (error) {
-      console.error('Storage delete error:', error);
-      throw error;
-    }
-  }
-};
-
-// ========== COMPONENTS ==========
-
-const Nav = ({ view, setView }) => (
-  <nav className="bg-gradient-to-r from-blue-600 to-blue-900 text-white shadow-xl">
-    <div className="container">
-      <div className="flex justify-between items-center h-16">
-        <div className="flex items-center space-x-3">
-          <div className="bg-white p-2 rounded-lg">
-            <Building className="h-6 w-6 text-blue-700" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight">BM Progress Tracker</h1>
-            <p className="text-blue-200 text-sm">Construction Management Dashboard</p>
-          </div>
-        </div>
-        <div className="flex items-center space-x-2">
-          <button 
-            onClick={() => setView('summary')} 
-            className={`px-4 py-2 rounded-lg transition-all ${view === 'summary' ? 'bg-white text-blue-700 shadow-md' : 'text-white hover:bg-blue-600'}`}
-          >
-            Dashboard
-          </button>
-          <button 
-            onClick={() => setView('add')} 
-            className="px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg hover:from-green-600 hover:to-emerald-700 shadow-md hover:shadow-lg transition-all flex items-center space-x-2"
-          >
-            <Plus size={18} />
-            <span>New Project</span>
-          </button>
-        </div>
-      </div>
-    </div>
-  </nav>
-);
-
-const ProjectForm = ({ existing, onSave, onCancel }) => {
-  const [formData, setFormData] = useState(
-    existing || {
-      name: '',
-      contractor: '',
-      supervisor: '',
-      contractPrice: '',
-      workType: 'flexible-pavement',
-      roadHierarchy: 'JAS',
-      maintenanceType: 'reconstruction',
-      startDate: '',
-      endDate: '',
-      boq: [],
-      weeklyReports: []
-    }
-  );
-
-  const handleSubmit = async () => {
-    const requiredFields = ['name', 'contractor', 'supervisor', 'contractPrice', 'startDate', 'endDate'];
-    const missingFields = requiredFields.filter(field => !formData[field]);
-    
-    if (missingFields.length > 0) {
-      alert(`Please fill in: ${missingFields.join(', ')}`);
-      return;
-    }
-
-    const projectToSave = {
-      ...formData,
-      id: existing?.id || Date.now().toString(),
-      contractPrice: Number(formData.contractPrice)
-    };
-
-    await onSave(projectToSave);
-  };
-
-  const handleInputChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const formFields = [
-    { label: 'Project Name', field: 'name', type: 'text', required: true, icon: <FileText size={18} /> },
-    { label: 'Contractor', field: 'contractor', type: 'text', required: true, icon: <HardHat size={18} /> },
-    { label: 'Supervisor', field: 'supervisor', type: 'text', required: true, icon: <Users size={18} /> },
-    { label: 'Contract Value (IDR)', field: 'contractPrice', type: 'number', required: true, icon: <DollarSign size={18} /> },
-    { 
-      label: 'Work Type', 
-      field: 'workType', 
-      type: 'select',
-      options: [
-        { value: 'rigid-pavement', label: 'Rigid Pavement' },
-        { value: 'flexible-pavement', label: 'Flexible Pavement' },
-        { value: 'combination', label: 'Combination' },
-        { value: 'other', label: 'Other' }
-      ],
-      icon: <Building size={18} />
-    },
-    { 
-      label: 'Road Hierarchy', 
-      field: 'roadHierarchy', 
-      type: 'select',
-      options: [
-        { value: 'JAS', label: 'Jalan Arteri Sekunder (JAS)' },
-        { value: 'JKS', label: 'Jalan Kolektor Sekunder (JKS)' },
-        { value: 'JLS', label: 'Jalan Lokal Sekunder (JLS)' },
-        { value: 'Jling-S', label: 'Jalan Lingkungan Sekunder (Jling-S)' },
-        { value: 'J-ling Kota', label: 'Jalan Lingkungan Kota' }
-      ],
-      icon: <Target size={18} />
-    },
-    { 
-      label: 'Maintenance Type', 
-      field: 'maintenanceType', 
-      type: 'select',
-      options: [
-        { value: 'reconstruction', label: 'Reconstruction' },
-        { value: 'rehabilitation', label: 'Rehabilitation' },
-        { value: 'periodic-rehabilitation', label: 'Periodic Rehabilitation' },
-        { value: 'routine-maintenance', label: 'Routine Maintenance' }
-      ],
-      icon: <TrendingUp size={18} />
-    },
-    { label: 'Start Date', field: 'startDate', type: 'date', required: true, icon: <Calendar size={18} /> },
-    { label: 'End Date', field: 'endDate', type: 'date', required: true, icon: <Calendar size={18} /> }
-  ];
-
-  return (
-    <div className="max-w-6xl mx-auto p-4">
-      <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-200">
-        <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-bold text-white">{existing ? 'Edit Project' : 'Create New Project'}</h2>
-              <p className="text-blue-100 mt-1">Fill in the project details below</p>
-            </div>
-            <div className="bg-white/20 p-3 rounded-full">
-              <FileText className="h-6 w-6 text-white" />
-            </div>
-          </div>
-        </div>
-        
-        <div className="p-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {formFields.map(({ label, field, type, options, required, icon }) => (
-              <div key={field} className="space-y-2">
-                <label className="flex items-center text-sm font-medium text-gray-700">
-                  {icon && <span className="mr-2 text-blue-600">{icon}</span>}
-                  {label} {required && <span className="text-red-500 ml-1">*</span>}
-                </label>
-                {type === 'select' ? (
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-                      {icon}
-                    </div>
-                    <select
-                      value={formData[field]}
-                      onChange={(e) => handleInputChange(field, e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
-                    >
-                      {options.map(opt => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                ) : (
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-                      {icon}
-                    </div>
-                    <input
-                      type={type}
-                      value={formData[field]}
-                      onChange={(e) => handleInputChange(field, e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                      required={required}
-                    />
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-          
-          <div className="flex justify-end space-x-4 mt-8 pt-6 border-t border-gray-100">
-            <button
-              onClick={onCancel}
-              className="px-6 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-all font-medium"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSubmit}
-              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 shadow-md hover:shadow-lg transition-all flex items-center space-x-2 font-medium"
-            >
-              <Save size={18} />
-              <span>{existing ? 'Update Project' : 'Create Project'}</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const StatCard = ({ title, value, icon, trend, trendText, color }) => (
-  <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-shadow duration-300">
-    <div className="flex items-center justify-between">
-      <div>
-        <p className="text-sm font-medium text-gray-600">{title}</p>
-        <p className="text-3xl font-bold mt-2 text-gray-900">{value}</p>
-        {trend && (
-          <div className={`flex items-center mt-2 text-sm ${trend >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            {trend >= 0 ? '↗' : '↘'} {trendText}
-          </div>
-        )}
-      </div>
-      <div className={`p-3 rounded-xl ${color || 'bg-blue-50'}`}>
-        {React.cloneElement(icon, { 
-          className: `h-6 w-6 ${color?.includes('blue') ? 'text-blue-600' : color?.includes('green') ? 'text-green-600' : color?.includes('orange') ? 'text-orange-600' : 'text-blue-600'}` 
-        })}
-      </div>
-    </div>
-  </div>
-);
-
-const ProgressBar = ({ progress, showLabel = true, size = 'md' }) => {
-  const height = size === 'sm' ? 'h-2' : size === 'lg' ? 'h-4' : 'h-3';
-  const fontSize = size === 'lg' ? 'text-sm' : 'text-xs';
-  
-  return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between">
-        {showLabel && (
-          <>
-            <span className="text-sm font-medium text-gray-700">Progress</span>
-            <span className="text-sm font-bold text-gray-900">{progress.toFixed(1)}%</span>
-          </>
-        )}
-      </div>
-      <div className={`w-full bg-gray-200 rounded-full ${height} overflow-hidden`}>
-        <div 
-          className={`h-full rounded-full transition-all duration-500 ${
-            progress >= 90 ? 'bg-gradient-to-r from-green-500 to-emerald-600' :
-            progress >= 70 ? 'bg-gradient-to-r from-blue-500 to-blue-600' :
-            progress >= 50 ? 'bg-gradient-to-r from-yellow-500 to-amber-600' :
-            progress >= 30 ? 'bg-gradient-to-r from-orange-500 to-orange-600' :
-            'bg-gradient-to-r from-red-500 to-red-600'
-          }`}
-          style={{ width: `${Math.min(progress, 100)}%` }}
-        />
-      </div>
-      {showLabel && (
-        <div className="flex items-center justify-between">
-          <span className={`${fontSize} font-medium ${getStatusColor(progress).split(' ')[0]}`}>
-            {getStatusText(progress)}
-          </span>
-          <span className={`${fontSize} ${getStatusColor(progress).split(' ')[0]}`}>
-            {progress >= 90 ? '🚀 Excellent' : 
-             progress >= 70 ? '👍 Good' : 
-             progress >= 50 ? '⏱️ On Track' : 
-             progress >= 30 ? '⚠️ Delayed' : '🚨 Critical'}
-          </span>
-        </div>
-      )}
-    </div>
-  );
-};
-
-const ProjectCard = ({ project, onClick, onDelete }) => {
-  const progress = calculateProjectProgress(project);
-  const daysRemaining = Math.ceil((new Date(project.endDate) - new Date()) / (1000 * 60 * 60 * 24));
-  
-  return (
-    <div className="bg-white rounded-2xl shadow-lg border border-gray-200 hover:shadow-xl transition-all duration-300 hover:border-blue-300 overflow-hidden">
-      <div className="p-6">
-        <div className="flex justify-between items-start mb-4">
-          <div className="flex-1">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-gray-900 truncate">{project.name}</h3>
-              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(progress)}`}>
-                {getStatusText(progress)}
-              </span>
-            </div>
-            <div className="flex items-center space-x-4 mt-2 text-sm text-gray-600">
-              <span className="flex items-center">
-                <HardHat size={14} className="mr-1" />
-                {project.contractor}
-              </span>
-              <span className="flex items-center">
-                <Users size={14} className="mr-1" />
-                {project.supervisor}
-              </span>
-            </div>
-          </div>
-        </div>
-        
-        <ProgressBar progress={progress} showLabel={false} size="lg" />
-        
-        <div className="grid grid-cols-2 gap-4 mt-6">
-          <div className="space-y-1">
-            <p className="text-xs text-gray-500">Contract Value</p>
-            <p className="font-semibold text-gray-900">{formatCurrency(project.contractPrice)}</p>
-          </div>
-          <div className="space-y-1">
-            <p className="text-xs text-gray-500">Timeline</p>
-            <div className="flex items-center space-x-2">
-              <Clock size={14} className="text-gray-400" />
-              <span className={`font-semibold ${daysRemaining < 30 ? 'text-red-600' : 'text-gray-900'}`}>
-                {daysRemaining > 0 ? `${daysRemaining} days left` : 'Completed'}
-              </span>
-            </div>
-          </div>
-        </div>
-        
-        <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-100">
-          <button
-            onClick={onClick}
-            className="flex items-center space-x-2 text-blue-600 hover:text-blue-800 font-medium text-sm"
-          >
-            <span>View Details</span>
-            <ChevronRight size={16} />
-          </button>
-          <div className="flex space-x-2">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(project.id);
-              }}
-              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-              title="Delete project"
-            >
-              <Trash2 size={18} />
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const SummaryView = ({ projects, onViewDetail, onDeleteProject }) => {
-  const stats = useMemo(() => {
-    const totalValue = projects.reduce((sum, p) => sum + Number(p.contractPrice || 0), 0);
-    const avgProgress = projects.length > 0 
-      ? projects.reduce((sum, p) => sum + calculateProjectProgress(p), 0) / projects.length 
-      : 0;
-    
-    const activeProjects = projects.filter(p => new Date(p.endDate) > new Date()).length;
-    const delayedProjects = projects.filter(p => {
-      const progress = calculateProjectProgress(p);
-      const expectedProgress = 100 * (Date.now() - new Date(p.startDate)) / (new Date(p.endDate) - new Date(p.startDate));
-      return progress < expectedProgress;
-    }).length;
-    
-    return { totalValue, avgProgress, activeProjects, delayedProjects };
-  }, [projects]);
-
-  const chartData = useMemo(() => 
-    projects.map(p => ({
-      name: p.name.length > 12 ? `${p.name.substring(0, 12)}...` : p.name,
-      progress: calculateProjectProgress(p),
-      value: Number(p.contractPrice) / 1000000000
-    })),
-    [projects]
-  );
-
-  return (
-    <div className="container">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Dashboard Overview</h1>
-        <p className="text-gray-600 mt-2">Monitor all your construction projects in one place</p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <StatCard 
-          title="Total Projects" 
-          value={projects.length} 
-          icon={<Building />}
-          color="bg-blue-50"
-          trend={projects.length > 0 ? 1 : 0}
-          trendText="All projects"
-        />
-        <StatCard 
-          title="Total Value" 
-          value={formatCurrency(stats.totalValue)} 
-          icon={<DollarSign />}
-          color="bg-green-50"
-        />
-        <StatCard 
-          title="Avg. Progress" 
-          value={`${stats.avgProgress.toFixed(1)}%`} 
-          icon={<TrendingUp />}
-          color="bg-orange-50"
-          trend={stats.avgProgress > 50 ? 1 : -1}
-          trendText={stats.avgProgress > 50 ? 'Ahead' : 'Behind'}
-        />
-        <StatCard 
-          title="Active Projects" 
-          value={stats.activeProjects} 
-          icon={<CheckCircle />}
-          color="bg-purple-50"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-        <div className="lg:col-span-2">
-          <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-200">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">Project Progress Overview</h2>
-                <p className="text-gray-600 text-sm">Visual comparison of all project progress</p>
-              </div>
-              <BarChart3 className="h-8 w-8 text-blue-600" />
-            </div>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis 
-                    dataKey="name" 
-                    angle={-45} 
-                    textAnchor="end" 
-                    height={60} 
-                    tick={{ fontSize: 12 }}
-                    stroke="#666"
-                  />
-                  <YAxis 
-                    yAxisId="left"
-                    domain={[0, 100]} 
-                    stroke="#666"
-                  />
-                  <YAxis 
-                    yAxisId="right" 
-                    orientation="right"
-                    stroke="#666"
-                  />
-                  <Tooltip 
-                    formatter={(value, name) => {
-                      if (name === 'progress') return [`${value}%`, 'Progress'];
-                      if (name === 'value') return [`${value} Billion IDR`, 'Value'];
-                      return [value, name];
-                    }}
-                  />
-                  <Bar 
-                    yAxisId="left"
-                    dataKey="progress" 
-                    fill="#3b82f6" 
-                    name="Progress %"
-                    radius={[4, 4, 0, 0]}
-                  />
-                  <Bar 
-                    yAxisId="right"
-                    dataKey="value" 
-                    fill="#10b981" 
-                    name="Value (Billion IDR)"
-                    radius={[4, 4, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-200">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-xl font-bold text-gray-900">Quick Stats</h2>
-              <p className="text-gray-600 text-sm">Project health indicators</p>
-            </div>
-            <Target className="h-8 w-8 text-blue-600" />
-          </div>
-          
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 bg-blue-50 rounded-xl">
-              <div className="flex items-center space-x-3">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <CheckCircle className="h-5 w-5 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-700">On Schedule</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {projects.length - stats.delayedProjects}
-                  </p>
-                </div>
-              </div>
-              <span className="text-green-600 text-sm font-semibold">✓ Good</span>
-            </div>
-
-            <div className="flex items-center justify-between p-4 bg-orange-50 rounded-xl">
-              <div className="flex items-center space-x-3">
-                <div className="p-2 bg-orange-100 rounded-lg">
-                  <AlertCircle className="h-5 w-5 text-orange-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-700">Delayed</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.delayedProjects}</p>
-                </div>
-              </div>
-              <span className="text-orange-600 text-sm font-semibold">⚠️ Needs Attention</span>
-            </div>
-
-            <div className="p-4 bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl border border-blue-200">
-              <p className="text-sm font-medium text-blue-800 mb-1">Overall Health</p>
-              <ProgressBar progress={stats.avgProgress} size="sm" />
-              <p className="text-xs text-blue-600 mt-2">
-                {stats.avgProgress > 70 ? 'Projects are performing well' :
-                 stats.avgProgress > 40 ? 'Projects need monitoring' :
-                 'Immediate attention required'}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-bold text-gray-900">All Projects ({projects.length})</h2>
-              <p className="text-gray-600 text-sm">Click on any project to view details</p>
-            </div>
-            <div className="flex items-center space-x-2">
-              <button className="px-4 py-2 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-colors text-sm font-medium flex items-center space-x-2">
-                <Download size={16} />
-                <span>Export</span>
-              </button>
-            </div>
-          </div>
-        </div>
-        
-        <div className="p-6">
-          {projects.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="mx-auto w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                <Building className="h-12 w-12 text-gray-400" />
-              </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No projects yet</h3>
-              <p className="text-gray-600 mb-6">Create your first project to get started</p>
-              <button 
-                onClick={() => window.location.href = '#add'}
-                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 shadow-md font-medium"
-              >
-                Create First Project
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {projects.map(project => (
-                <ProjectCard
-                  key={project.id}
-                  project={project}
-                  onClick={() => onViewDetail(project)}
-                  onDelete={onDeleteProject}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const ProjectDetailView = ({ project, onEdit, onDelete, onUpdate, onBack }) => {
-  const progress = calculateProjectProgress(project);
-  
-  return (
-    <div className="container">
-      <div className="mb-6">
-        <button
-          onClick={onBack}
-          className="flex items-center text-blue-600 hover:text-blue-800 font-medium"
-        >
-          <ChevronLeft size={20} />
-          <span className="ml-2">Back to Dashboard</span>
-        </button>
-      </div>
-      
-      <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-200">
-        <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-8 py-6">
-          <div className="flex justify-between items-start">
-            <div>
-              <h1 className="text-2xl font-bold text-white">{project.name}</h1>
-              <div className="flex items-center space-x-4 mt-2 text-blue-100">
-                <span className="flex items-center">
-                  <HardHat size={16} className="mr-2" />
-                  {project.contractor}
-                </span>
-                <span className="flex items-center">
-                  <Users size={16} className="mr-2" />
-                  {project.supervisor}
-                </span>
-              </div>
-            </div>
-            <div className="flex space-x-3">
-              <button
-                onClick={onEdit}
-                className="px-4 py-2 bg-white/20 text-white rounded-xl hover:bg-white/30 transition-colors flex items-center space-x-2"
-              >
-                <Edit2 size={18} />
-                <span>Edit</span>
-              </button>
-              <button
-                onClick={onDelete}
-                className="px-4 py-2 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors flex items-center space-x-2"
-              >
-                <Trash2 size={18} />
-                <span>Delete</span>
-              </button>
-            </div>
-          </div>
-        </div>
-        
-        <div className="p-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div className="bg-blue-50 p-6 rounded-xl">
-              <div className="flex items-center space-x-3 mb-4">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <DollarSign className="h-5 w-5 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Contract Value</p>
-                  <p className="text-xl font-bold text-gray-900">{formatCurrency(project.contractPrice)}</p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-green-50 p-6 rounded-xl">
-              <div className="flex items-center space-x-3 mb-4">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <TrendingUp className="h-5 w-5 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Overall Progress</p>
-                  <p className="text-xl font-bold text-gray-900">{progress.toFixed(1)}%</p>
-                </div>
-              </div>
-              <ProgressBar progress={progress} />
-            </div>
-            
-            <div className="bg-purple-50 p-6 rounded-xl">
-              <div className="flex items-center space-x-3 mb-4">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <Calendar className="h-5 w-5 text-purple-600" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Timeline</p>
-                  <p className="text-xl font-bold text-gray-900">
-                    {formatDate(project.startDate)} - {formatDate(project.endDate)}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-gray-50 p-6 rounded-xl mb-8">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Project Details</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <p className="text-sm text-gray-600">Work Type</p>
-                <p className="font-medium">{project.workType}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Road Hierarchy</p>
-                <p className="font-medium">{project.roadHierarchy}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Maintenance Type</p>
-                <p className="font-medium">{project.maintenanceType}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Status</p>
-                <p className="font-medium text-green-600">Active</p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="text-center py-12">
-            <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <FileText className="h-12 w-12 text-gray-400" />
-            </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">BoQ & Reports Coming Soon</h3>
-            <p className="text-gray-600">Full project management features will be available in the next update.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ========== MAIN APP COMPONENT ==========
 export default function App() {
   const [projects, setProjects] = useState([]);
   const [view, setView] = useState('summary');
-  const [selectedProject, setSelectedProject] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  const loadProjects = useCallback(async () => {
-    setLoading(true);
-    try {
-      const result = await storageService.list('project:');
-      if (result?.keys) {
-        const projectData = await Promise.all(
-          result.keys.map(async (key) => {
-            const data = await storageService.get(key.key);
-            return data;
-          })
-        );
-        setProjects(projectData.filter(p => p));
-      }
-    } catch (error) {
-      console.error('Failed to load projects:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const [selected, setSelected] = useState(null);
 
   useEffect(() => {
     loadProjects();
-  }, [loadProjects]);
-
-  const handleSaveProject = useCallback(async (projectData) => {
-    try {
-      await storageService.set(`project:${projectData.id}`, projectData);
-      await loadProjects();
-      setSelectedProject(projectData);
-      setView('detail');
-    } catch (error) {
-      alert('Failed to save project. Please try again.');
-      console.error('Save error:', error);
-    }
-  }, [loadProjects]);
-
-  const handleDeleteProject = useCallback(async (projectId) => {
-    if (!window.confirm('Are you sure you want to delete this project? This action cannot be undone.')) {
-      return;
-    }
-
-    try {
-      await storageService.delete(`project:${projectId}`);
-      await loadProjects();
-      setSelectedProject(null);
-      setView('summary');
-    } catch (error) {
-      alert('Failed to delete project. Please try again.');
-      console.error('Delete error:', error);
-    }
-  }, [loadProjects]);
-
-  const handleViewDetail = useCallback((project) => {
-    setSelectedProject(project);
-    setView('detail');
   }, []);
 
-  const handleBackToSummary = useCallback(() => {
-    setView('summary');
-    setSelectedProject(null);
-  }, []);
+  const loadProjects = async () => {
+    try {
+      const result = await window.storage.list('project:');
+      if (result && result.keys) {
+        const data = await Promise.all(result.keys.map(async (key) => {
+          try {
+            const d = await window.storage.get(key);
+            return d ? JSON.parse(d.value) : null;
+          } catch (e) { return null; }
+        }));
+        setProjects(data.filter(p => p));
+      }
+    } catch (e) {}
+  };
 
-  if (loading && view === 'summary') {
+  const saveProject = async (proj) => {
+    try {
+      const p = proj.id ? proj : { ...proj, id: Date.now().toString() };
+      await window.storage.set('project:' + p.id, JSON.stringify(p));
+      await loadProjects();
+      return p;
+    } catch (e) { alert('Save failed'); }
+  };
+
+  const deleteProject = async (id) => {
+    if (window.confirm('Delete?')) {
+      try {
+        await window.storage.delete('project:' + id);
+        await loadProjects();
+        setView('summary');
+        setSelected(null);
+      } catch (e) {}
+    }
+  };
+
+  const getProgress = (p) => {
+    if (!p.weeklyReports || !p.weeklyReports.length) return 0;
+    return p.weeklyReports[p.weeklyReports.length - 1].cumulativeProgress || 0;
+  };
+
+  const fmt = (n) => new Intl.NumberFormat('id-ID', {style:'currency',currency:'IDR',minimumFractionDigits:0}).format(n);
+
+  const Nav = () => (
+    <div className="bg-blue-600 text-white p-4 mb-6">
+      <div className="max-w-7xl mx-auto flex justify-between items-center">
+        <h1 className="text-2xl font-bold">BM Progress Tracker</h1>
+        <div className="flex gap-4">
+          <button onClick={() => setView('summary')} className={'px-4 py-2 rounded ' + (view === 'summary' ? 'bg-blue-800' : 'bg-blue-500')}>Dashboard</button>
+          <button onClick={() => setView('add')} className="px-4 py-2 bg-green-600 rounded">+ New</button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const ProjectForm = ({ existing, onSave, onCancel }) => {
+    const [fd, setFd] = useState(existing || {name:'',contractor:'',supervisor:'',contractPrice:'',workType:'flexible-pavement',roadHierarchy:'JAS',maintenanceType:'reconstruction',startDate:'',endDate:'',boq:[],weeklyReports:[]});
+    
+    const submit = async () => {
+      if (!fd.name || !fd.contractor || !fd.supervisor || !fd.contractPrice || !fd.startDate || !fd.endDate) {
+        alert('Fill required fields');
+        return;
+      }
+      const s = await saveProject(fd);
+      if (s) onSave();
+    };
+
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-        <Nav view={view} setView={setView} />
-        <div className="container py-12">
-          <div className="animate-pulse space-y-8">
-            <div className="h-8 bg-gray-200 rounded w-64 mb-6"></div>
-            <div className="grid grid-cols-4 gap-6 mb-8">
-              {[...Array(4)].map((_, i) => (
-                <div key={i} className="h-32 bg-gray-200 rounded-2xl"></div>
-              ))}
-            </div>
-            <div className="h-96 bg-gray-200 rounded-2xl mb-8"></div>
-          </div>
+      <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-6">
+        <h2 className="text-2xl font-bold mb-6">{existing ? 'Edit' : 'New'} Project</h2>
+        <div className="grid grid-cols-2 gap-4">
+          <div><label className="block text-sm font-medium mb-1">Name</label><input type="text" value={fd.name} onChange={(e) => setFd({...fd, name: e.target.value})} className="w-full px-3 py-2 border rounded-md" /></div>
+          <div><label className="block text-sm font-medium mb-1">Contractor</label><input type="text" value={fd.contractor} onChange={(e) => setFd({...fd, contractor: e.target.value})} className="w-full px-3 py-2 border rounded-md" /></div>
+          <div><label className="block text-sm font-medium mb-1">Supervisor</label><input type="text" value={fd.supervisor} onChange={(e) => setFd({...fd, supervisor: e.target.value})} className="w-full px-3 py-2 border rounded-md" /></div>
+          <div><label className="block text-sm font-medium mb-1">Price (IDR)</label><input type="number" value={fd.contractPrice} onChange={(e) => setFd({...fd, contractPrice: e.target.value})} className="w-full px-3 py-2 border rounded-md" /></div>
+          <div><label className="block text-sm font-medium mb-1">Work Type</label><select value={fd.workType} onChange={(e) => setFd({...fd, workType: e.target.value})} className="w-full px-3 py-2 border rounded-md"><option value="rigid-pavement">Rigid Pavement</option><option value="flexible-pavement">Flexible Pavement</option><option value="combination">Combination</option><option value="other">Other</option></select></div>
+          <div><label className="block text-sm font-medium mb-1">Road Hierarchy</label><select value={fd.roadHierarchy} onChange={(e) => setFd({...fd, roadHierarchy: e.target.value})} className="w-full px-3 py-2 border rounded-md"><option value="JAS">JAS</option><option value="JKS">JKS</option><option value="JLS">JLS</option><option value="Jling-S">Jling-S</option><option value="J-ling Kota">J-ling Kota</option></select></div>
+          <div><label className="block text-sm font-medium mb-1">Maintenance</label><select value={fd.maintenanceType} onChange={(e) => setFd({...fd, maintenanceType: e.target.value})} className="w-full px-3 py-2 border rounded-md"><option value="reconstruction">Reconstruction</option><option value="rehabilitation">Rehabilitation</option><option value="periodic-rehabilitation">Periodic Rehabilitation</option><option value="routine-maintenance">Routine Maintenance</option></select></div>
+          <div><label className="block text-sm font-medium mb-1">Start Date</label><input type="date" value={fd.startDate} onChange={(e) => setFd({...fd, startDate: e.target.value})} className="w-full px-3 py-2 border rounded-md" /></div>
+          <div><label className="block text-sm font-medium mb-1">End Date</label><input type="date" value={fd.endDate} onChange={(e) => setFd({...fd, endDate: e.target.value})} className="w-full px-3 py-2 border rounded-md" /></div>
+        </div>
+        <div className="flex gap-3 mt-6">
+          <button onClick={submit} className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700"><Save size={18} />Save</button>
+          <button onClick={onCancel} className="bg-gray-200 text-gray-700 px-6 py-2 rounded-md">Cancel</button>
         </div>
       </div>
     );
-  }
+  };
+
+  const Summary = () => {
+    const total = projects.reduce((s, p) => s + Number(p.contractPrice || 0), 0);
+    const avg = projects.length > 0 ? projects.reduce((s, p) => s + getProgress(p), 0) / projects.length : 0;
+    const chartData = projects.map(p => ({name: p.name.substring(0, 15), progress: getProgress(p)}));
+
+    return (
+      <div className="max-w-7xl mx-auto">
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="bg-white rounded-lg shadow p-6"><p className="text-sm text-gray-600">Total Projects</p><p className="text-3xl font-bold">{projects.length}</p></div>
+          <div className="bg-white rounded-lg shadow p-6"><p className="text-sm text-gray-600">Total Value</p><p className="text-lg font-bold">{fmt(total)}</p></div>
+          <div className="bg-white rounded-lg shadow p-6"><p className="text-sm text-gray-600">Avg Progress</p><p className="text-3xl font-bold">{avg.toFixed(1)}%</p></div>
+        </div>
+        {projects.length > 0 && (
+          <div className="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 className="text-xl font-bold mb-4">Progress Overview</h2>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
+                <YAxis domain={[0, 100]} />
+                <Tooltip />
+                <Bar dataKey="progress" fill="#3b82f6" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+        <div className="bg-white rounded-lg shadow">
+          <div className="px-6 py-4 border-b"><h2 className="text-xl font-bold">All Projects</h2></div>
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contractor</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Supervisor</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Value</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Progress</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {projects.length === 0 ? (
+                <tr><td colSpan="6" className="px-6 py-8 text-center text-gray-500">No projects</td></tr>
+              ) : (
+                projects.map(p => (
+                  <tr key={p.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 text-sm font-medium">{p.name}</td>
+                    <td className="px-6 py-4 text-sm">{p.contractor}</td>
+                    <td className="px-6 py-4 text-sm">{p.supervisor}</td>
+                    <td className="px-6 py-4 text-sm">{fmt(p.contractPrice)}</td>
+                    <td className="px-6 py-4 text-sm">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 bg-gray-200 rounded-full h-2 max-w-[100px]">
+                          <div className="bg-blue-600 h-2 rounded-full" style={{width: getProgress(p) + '%'}}></div>
+                        </div>
+                        <span className="font-medium">{getProgress(p).toFixed(2)}%</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-sm">
+                      <button onClick={() => {setSelected(p); setView('detail');}} className="text-blue-600 hover:text-blue-800 font-medium">View</button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
+  const BoQ = ({ project, onUpdate }) => {
+    const [items, setItems] = useState(project.boq || []);
+    const [n, setN] = useState({description:'',quantity:'',unit:'',unitPrice:''});
+
+    const add = () => {
+      if (!n.description || !n.quantity || !n.unit || !n.unitPrice) {alert('Fill all'); return;}
+      const item = {id: Date.now().toString(), ...n, quantity: Number(n.quantity), unitPrice: Number(n.unitPrice), total: Number(n.quantity) * Number(n.unitPrice), completed: 0};
+      const u = [...items, item];
+      setItems(u);
+      setN({description:'',quantity:'',unit:'',unitPrice:''});
+      save(u);
+    };
+
+    const del = (id) => {
+      const u = items.filter(i => i.id !== id);
+      setItems(u);
+      save(u);
+    };
+
+    const save = async (b) => {
+      await saveProject({...project, boq: b});
+      onUpdate();
+    };
+
+    const t = items.reduce((s, i) => s + i.total, 0);
+
+    return (
+      <div className="bg-white rounded-lg shadow p-6 mb-6">
+        <h3 className="text-xl font-bold mb-4">BoQ</h3>
+        <div className="mb-4 grid grid-cols-5 gap-2">
+          <input type="text" placeholder="Description" value={n.description} onChange={(e) => setN({...n, description: e.target.value})} className="px-3 py-2 border rounded-md text-sm" />
+          <input type="number" placeholder="Qty" value={n.quantity} onChange={(e) => setN({...n, quantity: e.target.value})} className="px-3 py-2 border rounded-md text-sm" />
+          <input type="text" placeholder="Unit" value={n.unit} onChange={(e) => setN({...n, unit: e.target.value})} className="px-3 py-2 border rounded-md text-sm" />
+          <input type="number" placeholder="Price" value={n.unitPrice} onChange={(e) => setN({...n, unitPrice: e.target.value})} className="px-3 py-2 border rounded-md text-sm" />
+          <button onClick={add} className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm">Add</button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-3 py-2 text-left">Description</th>
+                <th className="px-3 py-2 text-left">Qty</th>
+                <th className="px-3 py-2 text-left">Unit</th>
+                <th className="px-3 py-2 text-left">Price</th>
+                <th className="px-3 py-2 text-left">Total</th>
+                <th className="px-3 py-2 text-left">Completed</th>
+                <th className="px-3 py-2 text-left">%</th>
+                <th className="px-3 py-2 text-left">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {items.length === 0 ? (
+                <tr><td colSpan="8" className="px-3 py-8 text-center text-gray-500">No items</td></tr>
+              ) : (
+                items.map(i => (
+                  <tr key={i.id}>
+                    <td className="px-3 py-2">{i.description}</td>
+                    <td className="px-3 py-2">{i.quantity}</td>
+                    <td className="px-3 py-2">{i.unit}</td>
+                    <td className="px-3 py-2">{fmt(i.unitPrice)}</td>
+                    <td className="px-3 py-2 font-medium">{fmt(i.total)}</td>
+                    <td className="px-3 py-2">{i.completed || 0} {i.unit}</td>
+                    <td className="px-3 py-2">{i.quantity > 0 ? ((i.completed || 0) / i.quantity * 100).toFixed(1) : 0}%</td>
+                    <td className="px-3 py-2"><button onClick={() => del(i.id)} className="text-red-600"><Trash2 size={16} /></button></td>
+                  </tr>
+                ))
+              )}
+              {items.length > 0 && (
+                <tr className="bg-gray-50 font-bold">
+                  <td colSpan="4" className="px-3 py-2 text-right">TOTAL:</td>
+                  <td className="px-3 py-2">{fmt(t)}</td>
+                  <td colSpan="3"></td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
+  const Weekly = ({ project, onUpdate }) => {
+    const [reports, setReports] = useState(project.weeklyReports || []);
+    const [showModal, setShowModal] = useState(false);
+    const [n, setN] = useState({weekNumber:'',date:'',notes:'',workItems:[]});
+
+    const openModal = () => {
+      if (!project.boq || project.boq.length === 0) {
+        alert('Please add BoQ items first!');
+        return;
+      }
+      setN({weekNumber: reports.length + 1, date: '', notes: '', workItems: []});
+      setShowModal(true);
+    };
+
+    const addWorkItem = () => {
+      setN({...n, workItems: [...n.workItems, {boqItemId: '', qtyCompleted: ''}]});
+    };
+
+    const updateWorkItem = (idx, field, val) => {
+      const updated = [...n.workItems];
+      updated[idx][field] = val;
+      setN({...n, workItems: updated});
+    };
+
+    const removeWorkItem = (idx) => {
+      setN({...n, workItems: n.workItems.filter((_, i) => i !== idx)});
+    };
+
+    const calculateProgress = () => {
+      const boq = project.boq || [];
+      const totalValue = Number(project.contractPrice) || boq.reduce((s, i) => s + i.total, 0);
+      
+      if (totalValue === 0) return 0;
+
+      let weekProgress = 0;
+      n.workItems.forEach(wi => {
+        const boqItem = boq.find(b => b.id === wi.boqItemId);
+        if (boqItem && wi.qtyCompleted) {
+          const itemValue = Number(wi.qtyCompleted) * boqItem.unitPrice;
+          weekProgress += (itemValue / totalValue) * 100;
+        }
+      });
+
+      return weekProgress;
+    };
+
+    const add = async () => {
+      if (!n.weekNumber || !n.date || n.workItems.length === 0) {
+        alert('Fill required fields and add at least one work item');
+        return;
+      }
+
+      const weekProgress = calculateProgress();
+      const prevCumulative = reports.length > 0 ? reports[reports.length - 1].cumulativeProgress : 0;
+      const cumulativeProgress = prevCumulative + weekProgress;
+
+      const boq = [...project.boq];
+      n.workItems.forEach(wi => {
+        const boqItem = boq.find(b => b.id === wi.boqItemId);
+        if (boqItem) {
+          boqItem.completed = (boqItem.completed || 0) + Number(wi.qtyCompleted);
+        }
+      });
+
+      const r = {
+        id: Date.now().toString(),
+        weekNumber: Number(n.weekNumber),
+        date: n.date,
+        notes: n.notes,
+        workItems: n.workItems,
+        weekProgress: weekProgress,
+        cumulativeProgress: cumulativeProgress
+      };
+
+      const u = [...reports, r].sort((a, b) => a.weekNumber - b.weekNumber);
+      
+      await saveProject({...project, weeklyReports: u, boq: boq});
+      onUpdate();
+      setReports(u);
+      setShowModal(false);
+    };
+
+    const del = async (id) => {
+      if (!window.confirm('Delete? Progress will be recalculated')) return;
+      
+      const u = reports.filter(r => r.id !== id);
+      const boq = [...project.boq];
+      boq.forEach(b => b.completed = 0);
+      
+      let cumulative = 0;
+      u.forEach(r => {
+        r.workItems.forEach(wi => {
+          const boqItem = boq.find(b => b.id === wi.boqItemId);
+          if (boqItem) {
+            boqItem.completed = (boqItem.completed || 0) + Number(wi.qtyCompleted);
+          }
+        });
+        cumulative += r.weekProgress;
+        r.cumulativeProgress = cumulative;
+      });
+
+      await saveProject({...project, weeklyReports: u, boq: boq});
+      onUpdate();
+      setReports(u);
+    };
+
+    return (
+      <div className="bg-white rounded-lg shadow p-6 mb-6">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-bold">Weekly Reports (Weighted by BoQ)</h3>
+          <button onClick={openModal} className="bg-green-600 text-white px-4 py-2 rounded-md text-sm">+ Add Week</button>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-3 py-2 text-left">Week</th>
+                <th className="px-3 py-2 text-left">Date</th>
+                <th className="px-3 py-2 text-left">Items</th>
+                <th className="px-3 py-2 text-left">Week %</th>
+                <th className="px-3 py-2 text-left">Cumulative %</th>
+                <th className="px-3 py-2 text-left">Notes</th>
+                <th className="px-3 py-2 text-left">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {reports.length === 0 ? (
+                <tr><td colSpan="7" className="px-3 py-8 text-center text-gray-500">No reports</td></tr>
+              ) : (
+                reports.map(r => (
+                  <tr key={r.id}>
+                    <td className="px-3 py-2 font-medium">{r.weekNumber}</td>
+                    <td className="px-3 py-2">{r.date}</td>
+                    <td className="px-3 py-2">{r.workItems.length}</td>
+                    <td className="px-3 py-2 text-green-600 font-medium">+{r.weekProgress.toFixed(2)}%</td>
+                    <td className="px-3 py-2 font-bold text-blue-600">{r.cumulativeProgress.toFixed(2)}%</td>
+                    <td className="px-3 py-2">{r.notes || '-'}</td>
+                    <td className="px-3 py-2"><button onClick={() => del(r.id)} className="text-red-600"><Trash2 size={16} /></button></td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {showModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold">Add Weekly Report</h3>
+                <button onClick={() => setShowModal(false)} className="text-gray-500"><X size={24} /></button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div><label className="block text-sm font-medium mb-1">Week Number</label><input type="number" value={n.weekNumber} onChange={(e) => setN({...n, weekNumber: e.target.value})} className="w-full px-3 py-2 border rounded-md" /></div>
+                <div><label className="block text-sm font-medium mb-1">Date</label><input type="date" value={n.date} onChange={(e) => setN({...n, date: e.target.value})} className="w-full px-3 py-2 border rounded-md" /></div>
+              </div>
+
+              <div className="mb-4">
+                <div className="flex justify-between items-center mb-2">
+                  <label className="block text-sm font-medium">Work Completed This Week</label>
+                  <button onClick={addWorkItem} className="text-blue-600 text-sm">+ Add Item</button>
+                </div>
+                
+                {n.workItems.map((wi, idx) => (
+                  <div key={idx} className="grid grid-cols-3 gap-2 mb-2">
+                    <select value={wi.boqItemId} onChange={(e) => updateWorkItem(idx, 'boqItemId', e.target.value)} className="px-3 py-2 border rounded-md text-sm">
+                      <option value="">Select BoQ Item</option>
+                      {(project.boq || []).map(b => (
+                        <option key={b.id} value={b.id}>{b.description} ({b.unit})</option>
+                      ))}
+                    </select>
+                    <input type="number" step="0.01" placeholder="Qty Completed" value={wi.qtyCompleted} onChange={(e) => updateWorkItem(idx, 'qtyCompleted', e.target.value)} className="px-3 py-2 border rounded-md text-sm" />
+                    <button onClick={() => removeWorkItem(idx)} className="text-red-600 text-sm">Remove</button>
+                  </div>
+                ))}
+
+                {n.workItems.length === 0 && (
+                  <p className="text-sm text-gray-500 text-center py-4">No work items added yet</p>
+                )}
+              </div>
+
+              {n.workItems.length > 0 && (
+                <div className="bg-blue-50 p-3 rounded-md mb-4">
+                  <p className="text-sm font-medium">Calculated Progress: <span className="text-blue-600 text-lg">{calculateProgress().toFixed(2)}%</span></p>
+                </div>
+              )}
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-1">Notes (optional)</label>
+                <textarea value={n.notes} onChange={(e) => setN({...n, notes: e.target.value})} className="w-full px-3 py-2 border rounded-md" rows="3"></textarea>
+              </div>
+
+              <div className="flex gap-3">
+                <button onClick={add} className="bg-green-600 text-white px-6 py-2 rounded-md">Save</button>
+                <button onClick={() => setShowModal(false)} className="bg-gray-200 text-gray-700 px-6 py-2 rounded-md">Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const SCurve = ({ project }) => {
+    const reports = project.weeklyReports || [];
+    if (reports.length === 0) {
+      return <div className="bg-white rounded-lg shadow p-6"><h3 className="text-xl font-bold mb-4">S-Curve</h3><div className="text-center py-12 text-gray-500">Add weekly reports to see S-curve</div></div>;
+    }
+    const data = reports.sort((a, b) => a.weekNumber - b.weekNumber).map(r => ({week: 'W' + r.weekNumber, Progress: r.cumulativeProgress}));
+    return (
+      <div className="bg-white rounded-lg shadow p-6">
+        <h3 className="text-xl font-bold mb-4">S-Curve (Weighted)</h3>
+        <ResponsiveContainer width="100%" height={400}>
+          <LineChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="week" />
+            <YAxis domain={[0, 100]} />
+            <Tooltip />
+            <Legend />
+            <Line type="monotone" dataKey="Progress" stroke="#82ca9d" strokeWidth={3} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  };
+
+  const Detail = ({ project }) => {
+    return (
+      <div className="max-w-6xl mx-auto">
+        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+          <div className="flex justify-between items-start mb-6">
+            <div><h2 className="text-2xl font-bold mb-2">{project.name}</h2><p className="text-gray-600">ID: {project.id}</p></div>
+            <div className="flex gap-2">
+              <button onClick={() => {setSelected(project); setView('edit');}} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md"><Edit2 size={18} />Edit</button>
+              <button onClick={() => deleteProject(project.id)} className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-md"><Trash2 size={18} />Delete</button>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-6 mb-6">
+            <div>
+              <h3 className="font-semibold mb-3">Info</h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between"><span className="text-gray-600">Contractor:</span><span className="font-medium">{project.contractor}</span></div>
+                <div className="flex justify-between"><span className="text-gray-600">Supervisor:</span><span className="font-medium">{project.supervisor}</span></div>
+                <div className="flex justify-between"><span className="text-gray-600">Price:</span><span className="font-medium">{fmt(project.contractPrice)}</span></div>
+              </div>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-3">Technical</h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between"><span className="text-gray-600">Type:</span><span className="font-medium">{project.workType}</span></div>
+                <div className="flex justify-between"><span className="text-gray-600">Hierarchy:</span><span className="font-medium">{project.roadHierarchy}</span></div>
+                <div className="flex justify-between"><span className="text-gray-600">Maintenance:</span><span className="font-medium">{project.maintenanceType}</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <BoQ project={project} onUpdate={loadProjects} />
+        <Weekly project={project} onUpdate={loadProjects} />
+        <SCurve project={project} />
+      </div>
+    );
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      <Nav view={view} setView={setView} />
-      
-      <main className="py-8">
-        {view === 'summary' && (
-          <SummaryView 
-            projects={projects} 
-            onViewDetail={handleViewDetail}
-            onDeleteProject={handleDeleteProject}
-          />
-        )}
-        
-        {view === 'add' && (
-          <ProjectForm 
-            onSave={handleSaveProject}
-            onCancel={handleBackToSummary}
-          />
-        )}
-        
-        {view === 'edit' && selectedProject && (
-          <ProjectForm 
-            existing={selectedProject}
-            onSave={handleSaveProject}
-            onCancel={() => setView('detail')}
-          />
-        )}
-        
-        {view === 'detail' && selectedProject && (
-          <ProjectDetailView 
-            project={selectedProject}
-            onEdit={() => setView('edit')}
-            onDelete={() => handleDeleteProject(selectedProject.id)}
-            onUpdate={loadProjects}
-            onBack={handleBackToSummary}
-          />
-        )}
-      </main>
+    <div className="min-h-screen bg-gray-100 p-6">
+      <Nav />
+      {view === 'summary' && <Summary />}
+      {view === 'add' && <ProjectForm onSave={() => setView('summary')} onCancel={() => setView('summary')} />}
+      {view === 'edit' && <ProjectForm existing={selected} onSave={() => setView('detail')} onCancel={() => setView('detail')} />}
+      {view === 'detail' && selected && <Detail project={selected} />}
     </div>
   );
 }
