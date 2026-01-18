@@ -1,6 +1,9 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Plus, Edit2, Trash2, Save, X, Download, Upload, Calendar, BarChart3, CheckCircle, TrendingUp } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Plus, Edit2, Trash2, Save, X, Download, Upload, Calendar, BarChart3, CheckCircle, TrendingUp, Moon, Sun, Camera, MapPin, Image as ImageIcon, XCircle } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import 'leaflet/dist/leaflet.css';
+import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet';
+import L from 'leaflet';
 
 // Initialize storage ONCE at the top level
 if (!window.storage) {
@@ -57,35 +60,275 @@ const formatDate = (dateString) => {
   }
 };
 
+const formatLength = (meters) => {
+  if (!meters) return '0 m';
+  if (meters >= 1000) {
+    return `${(meters / 1000).toFixed(2)} km`;
+  }
+  return `${meters.toFixed(2)} m`;
+};
+
+const formatArea = (sqMeters) => {
+  if (!sqMeters) return '0 m²';
+  if (sqMeters >= 10000) {
+    return `${(sqMeters / 10000).toFixed(2)} ha`;
+  }
+  return `${sqMeters.toFixed(2)} m²`;
+};
+
+// Helper to convert base64 to blob
+const dataURLtoBlob = (dataURL) => {
+  const arr = dataURL.split(',');
+  const mime = arr[0].match(/:(.*?);/)[1];
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) {
+    u8arr[n] = bstr.charCodeAt(n);
+  }
+  return new Blob([u8arr], { type: mime });
+};
+
+// Custom leaflet icons
+const createCustomIcon = (darkMode) => {
+  return L.divIcon({
+    html: `<div class="w-10 h-10 rounded-full flex items-center justify-center ${darkMode ? 'bg-blue-700' : 'bg-blue-600'} text-white shadow-lg border-2 ${darkMode ? 'border-gray-800' : 'border-white'}">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" />
+            </svg>
+          </div>`,
+    className: 'custom-marker',
+    iconSize: [40, 40],
+    iconAnchor: [20, 40],
+    popupAnchor: [0, -40]
+  });
+};
+
 // Loading skeleton
-const LoadingSkeleton = React.memo(() => (
+const LoadingSkeleton = React.memo(({ darkMode }) => (
   <div className="animate-pulse">
-    <div className="h-8 bg-gray-200 rounded mb-4"></div>
+    <div className={`h-8 ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} rounded mb-4`}></div>
     <div className="grid grid-cols-3 gap-4 mb-6">
-      <div className="h-24 bg-gray-200 rounded"></div>
-      <div className="h-24 bg-gray-200 rounded"></div>
-      <div className="h-24 bg-gray-200 rounded"></div>
+      <div className={`h-24 ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} rounded`}></div>
+      <div className={`h-24 ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} rounded`}></div>
+      <div className={`h-24 ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} rounded`}></div>
     </div>
-    <div className="h-64 bg-gray-200 rounded"></div>
+    <div className={`h-64 ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} rounded`}></div>
   </div>
 ));
 
 LoadingSkeleton.displayName = 'LoadingSkeleton';
 
+// Photo Gallery Component
+const PhotoGallery = React.memo(({ photos, projectId, darkMode, onDeletePhoto }) => {
+  const [selectedImage, setSelectedImage] = useState(null);
+
+  if (!photos || photos.length === 0) {
+    return (
+      <div className={`text-center py-8 rounded-lg ${darkMode ? 'bg-gray-700/30' : 'bg-gray-50'}`}>
+        <ImageIcon className={`h-12 w-12 mx-auto mb-4 ${darkMode ? 'text-gray-500' : 'text-gray-400'}`} />
+        <p className={darkMode ? 'text-gray-400' : 'text-gray-500'}>No photos yet</p>
+        <p className={`text-sm mt-1 ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>Add photos in weekly reports</p>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        {photos.map((photo, index) => (
+          <div 
+            key={photo.id || index} 
+            className="relative group cursor-pointer"
+            onClick={() => setSelectedImage(photo)}
+          >
+            <div className="aspect-square rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+              <img 
+                src={photo.dataUrl} 
+                alt={`Project photo ${index + 1}`}
+                className="w-full h-full object-cover hover:scale-105 transition-transform duration-200"
+              />
+            </div>
+            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-opacity duration-200 rounded-lg"></div>
+            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeletePhoto(photo.id);
+                }}
+                className="bg-red-600 text-white p-1 rounded-full hover:bg-red-700"
+              >
+                <XCircle size={16} />
+              </button>
+            </div>
+            <div className="mt-2">
+              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                {photo.date ? formatDate(photo.date) : 'No date'}
+              </p>
+              <p className="text-xs text-gray-600 dark:text-gray-300 truncate">
+                {photo.description || 'No description'}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Week {photo.weekNumber || 'N/A'}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Image Preview Modal */}
+      {selectedImage && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4"
+          onClick={() => setSelectedImage(null)}
+        >
+          <div className="relative max-w-4xl max-h-[90vh]">
+            <button
+              className="absolute -top-10 right-0 text-white hover:text-gray-300"
+              onClick={() => setSelectedImage(null)}
+            >
+              <X size={24} />
+            </button>
+            <img 
+              src={selectedImage.dataUrl} 
+              alt="Preview"
+              className="max-w-full max-h-[80vh] rounded-lg"
+            />
+            <div className="mt-4 text-white">
+              <p className="font-semibold">{selectedImage.description || 'No description'}</p>
+              <p className="text-sm opacity-80">
+                {selectedImage.date ? formatDate(selectedImage.date) : 'No date'} | 
+                Week {selectedImage.weekNumber || 'N/A'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+});
+
+PhotoGallery.displayName = 'PhotoGallery';
+
+// Map Picker Component
+const MapPicker = React.memo(({ position, setPosition, darkMode }) => {
+  const LocationMarker = () => {
+    const map = useMapEvents({
+      click(e) {
+        setPosition([e.latlng.lat, e.latlng.lng]);
+        map.flyTo(e.latlng, map.getZoom());
+      },
+    });
+
+    return position === null ? null : (
+      <Marker 
+        position={position} 
+        icon={createCustomIcon(darkMode)}
+        draggable={true}
+        eventHandlers={{
+          dragend: (e) => {
+            const marker = e.target;
+            const position = marker.getLatLng();
+            setPosition([position.lat, position.lng]);
+          }
+        }}
+      >
+        <Popup>
+          <div className="text-sm">
+            <p className="font-semibold">Project Location</p>
+            <p>Lat: {position[0].toFixed(6)}</p>
+            <p>Lng: {position[1].toFixed(6)}</p>
+          </div>
+        </Popup>
+      </Marker>
+    );
+  };
+
+  const handleUseCurrentLocation = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          setPosition([latitude, longitude]);
+        },
+        (error) => {
+          console.error("Error getting location:", error);
+          alert("Unable to get current location. Please enable location services or select manually.");
+        }
+      );
+    } else {
+      alert("Geolocation is not supported by your browser.");
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+          Project Location
+        </label>
+        <button
+          type="button"
+          onClick={handleUseCurrentLocation}
+          className="flex items-center gap-2 px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+        >
+          <MapPin size={14} />
+          Use Current Location
+        </button>
+      </div>
+      
+      <div className="h-64 rounded-lg overflow-hidden border border-gray-300 dark:border-gray-600">
+        <MapContainer
+          center={position || [-6.2088, 106.8456]} // Default to Jakarta
+          zoom={13}
+          style={{ height: '100%', width: '100%' }}
+          scrollWheelZoom={true}
+        >
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+          {position && <LocationMarker />}
+        </MapContainer>
+      </div>
+      
+      {position && (
+        <div className={`p-3 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
+          <div className="flex items-center gap-2 text-sm">
+            <MapPin size={14} className={darkMode ? 'text-blue-400' : 'text-blue-600'} />
+            <span className={darkMode ? 'text-gray-300' : 'text-gray-700'}>
+              Selected Location: {position[0].toFixed(6)}, {position[1].toFixed(6)}
+            </span>
+          </div>
+          <div className="text-xs mt-1 opacity-70">
+            Click on the map to select location or drag the marker to adjust
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
+
+MapPicker.displayName = 'MapPicker';
+
 // ProjectForm Component
-const ProjectForm = React.memo(({ existing, onSave, onCancel }) => {
+const ProjectForm = React.memo(({ existing, onSave, onCancel, darkMode }) => {
   const [formData, setFormData] = useState(() => ({
     name: '',
     contractor: '',
     supervisor: '',
-    contractPrice: '0', // Will be auto-calculated from BoQ
+    contractPrice: '0',
     workType: 'flexible-pavement',
     roadHierarchy: 'JAS',
     maintenanceType: 'reconstruction',
     startDate: '',
     endDate: '',
+    length: '',
+    averageWidth: '',
+    location: existing?.location || null,
     boq: [],
     weeklyReports: [],
+    photos: existing?.photos || [],
     ...existing
   }));
   
@@ -102,6 +345,12 @@ const ProjectForm = React.memo(({ existing, onSave, onCancel }) => {
     if (formData.startDate && formData.endDate && formData.startDate > formData.endDate) {
       newErrors.endDate = 'End date must be after start date';
     }
+    if (!formData.length || isNaN(formData.length) || parseFloat(formData.length) <= 0) {
+      newErrors.length = 'Length must be a positive number';
+    }
+    if (!formData.averageWidth || isNaN(formData.averageWidth) || parseFloat(formData.averageWidth) <= 0) {
+      newErrors.averageWidth = 'Average width must be a positive number';
+    }
     return newErrors;
   }, [formData]);
 
@@ -117,6 +366,8 @@ const ProjectForm = React.memo(({ existing, onSave, onCancel }) => {
       const projectToSave = {
         ...formData,
         contractPrice: formData.contractPrice || '0',
+        length: parseFloat(formData.length),
+        averageWidth: parseFloat(formData.averageWidth),
         updatedAt: new Date().toISOString(),
         id: existing?.id || `project_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
       };
@@ -150,6 +401,10 @@ const ProjectForm = React.memo(({ existing, onSave, onCancel }) => {
     }
   }, [errors]);
 
+  const setLocation = useCallback((location) => {
+    handleChange('location', location);
+  }, [handleChange]);
+
   const handleNameChange = useCallback((e) => handleChange('name', e.target.value), [handleChange]);
   const handleContractorChange = useCallback((e) => handleChange('contractor', e.target.value), [handleChange]);
   const handleSupervisorChange = useCallback((e) => handleChange('supervisor', e.target.value), [handleChange]);
@@ -158,56 +413,93 @@ const ProjectForm = React.memo(({ existing, onSave, onCancel }) => {
   const handleMaintenanceTypeChange = useCallback((e) => handleChange('maintenanceType', e.target.value), [handleChange]);
   const handleStartDateChange = useCallback((e) => handleChange('startDate', e.target.value), [handleChange]);
   const handleEndDateChange = useCallback((e) => handleChange('endDate', e.target.value), [handleChange]);
+  const handleLengthChange = useCallback((e) => handleChange('length', e.target.value), [handleChange]);
+  const handleAverageWidthChange = useCallback((e) => handleChange('averageWidth', e.target.value), [handleChange]);
+
+  const bgClass = darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800';
+  const inputClass = darkMode 
+    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500' 
+    : 'border-gray-300 text-gray-700 placeholder-gray-500 focus:ring-blue-500 focus:border-blue-500';
+  const errorBorderClass = darkMode ? 'border-red-500' : 'border-red-500';
+  const infoBoxClass = darkMode ? 'bg-blue-900/50 border-blue-700 text-blue-200' : 'bg-blue-50 border-blue-200 text-blue-700';
 
   return (
-    <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-lg p-6">
-      <h2 className="text-2xl font-bold mb-6 text-gray-800 border-b pb-2">
+    <div className={`max-w-4xl mx-auto rounded-xl shadow-lg p-6 ${bgClass}`}>
+      <h2 className={`text-2xl font-bold mb-6 border-b pb-2 ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
         {existing ? 'Edit Project' : 'Create New Project'}
       </h2>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <label className="block text-sm font-medium mb-1 text-gray-700">Project Name *</label>
+          <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Project Name *</label>
           <input
             type="text"
             value={formData.name}
             onChange={handleNameChange}
-            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.name ? 'border-red-500' : 'border-gray-300'}`}
+            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:border-blue-500 ${errors.name ? errorBorderClass : 'border-gray-300'} ${inputClass}`}
             placeholder="Enter project name"
           />
-          {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name}</p>}
+          {errors.name && <p className="mt-1 text-sm text-red-500">{errors.name}</p>}
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-1 text-gray-700">Contractor *</label>
+          <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Contractor *</label>
           <input
             type="text"
             value={formData.contractor}
             onChange={handleContractorChange}
-            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.contractor ? 'border-red-500' : 'border-gray-300'}`}
+            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:border-blue-500 ${errors.contractor ? errorBorderClass : 'border-gray-300'} ${inputClass}`}
             placeholder="Enter contractor name"
           />
-          {errors.contractor && <p className="mt-1 text-sm text-red-600">{errors.contractor}</p>}
+          {errors.contractor && <p className="mt-1 text-sm text-red-500">{errors.contractor}</p>}
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-1 text-gray-700">Supervisor *</label>
+          <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Supervisor *</label>
           <input
             type="text"
             value={formData.supervisor}
             onChange={handleSupervisorChange}
-            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.supervisor ? 'border-red-500' : 'border-gray-300'}`}
+            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:border-blue-500 ${errors.supervisor ? errorBorderClass : 'border-gray-300'} ${inputClass}`}
             placeholder="Enter supervisor name"
           />
-          {errors.supervisor && <p className="mt-1 text-sm text-red-600">{errors.supervisor}</p>}
+          {errors.supervisor && <p className="mt-1 text-sm text-red-500">{errors.supervisor}</p>}
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-1 text-gray-700">Work Type</label>
+          <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Length (meters) *</label>
+          <input
+            type="number"
+            value={formData.length}
+            onChange={handleLengthChange}
+            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:border-blue-500 ${errors.length ? errorBorderClass : 'border-gray-300'} ${inputClass}`}
+            placeholder="Enter road length"
+            min="0"
+            step="0.01"
+          />
+          {errors.length && <p className="mt-1 text-sm text-red-500">{errors.length}</p>}
+        </div>
+
+        <div>
+          <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Average Width (meters) *</label>
+          <input
+            type="number"
+            value={formData.averageWidth}
+            onChange={handleAverageWidthChange}
+            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:border-blue-500 ${errors.averageWidth ? errorBorderClass : 'border-gray-300'} ${inputClass}`}
+            placeholder="Enter average width"
+            min="0"
+            step="0.01"
+          />
+          {errors.averageWidth && <p className="mt-1 text-sm text-red-500">{errors.averageWidth}</p>}
+        </div>
+
+        <div>
+          <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Work Type</label>
           <select
             value={formData.workType}
             onChange={handleWorkTypeChange}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:border-blue-500 ${inputClass}`}
           >
             <option value="rigid-pavement">Rigid Pavement</option>
             <option value="flexible-pavement">Flexible Pavement</option>
@@ -217,11 +509,11 @@ const ProjectForm = React.memo(({ existing, onSave, onCancel }) => {
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-1 text-gray-700">Road Hierarchy</label>
+          <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Road Hierarchy</label>
           <select
             value={formData.roadHierarchy}
             onChange={handleRoadHierarchyChange}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:border-blue-500 ${inputClass}`}
           >
             <option value="JAS">JAS</option>
             <option value="JKS">JKS</option>
@@ -232,11 +524,11 @@ const ProjectForm = React.memo(({ existing, onSave, onCancel }) => {
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-1 text-gray-700">Maintenance Type</label>
+          <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Maintenance Type</label>
           <select
             value={formData.maintenanceType}
             onChange={handleMaintenanceTypeChange}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:border-blue-500 ${inputClass}`}
           >
             <option value="reconstruction">Reconstruction</option>
             <option value="rehabilitation">Rehabilitation</option>
@@ -246,46 +538,58 @@ const ProjectForm = React.memo(({ existing, onSave, onCancel }) => {
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-1 text-gray-700">Start Date *</label>
+          <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Start Date *</label>
           <div className="relative">
-            <Calendar className="absolute left-3 top-2.5 text-gray-400" size={20} />
+            <Calendar className={`absolute left-3 top-2.5 ${darkMode ? 'text-gray-400' : 'text-gray-400'}`} size={20} />
             <input
               type="date"
               value={formData.startDate}
               onChange={handleStartDateChange}
-              className={`w-full pl-10 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.startDate ? 'border-red-500' : 'border-gray-300'}`}
+              className={`w-full pl-10 px-4 py-2 border rounded-lg focus:ring-2 focus:border-blue-500 ${errors.startDate ? errorBorderClass : 'border-gray-300'} ${inputClass}`}
             />
           </div>
-          {errors.startDate && <p className="mt-1 text-sm text-red-600">{errors.startDate}</p>}
+          {errors.startDate && <p className="mt-1 text-sm text-red-500">{errors.startDate}</p>}
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-1 text-gray-700">End Date *</label>
+          <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>End Date *</label>
           <div className="relative">
-            <Calendar className="absolute left-3 top-2.5 text-gray-400" size={20} />
+            <Calendar className={`absolute left-3 top-2.5 ${darkMode ? 'text-gray-400' : 'text-gray-400'}`} size={20} />
             <input
               type="date"
               value={formData.endDate}
               onChange={handleEndDateChange}
-              className={`w-full pl-10 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.endDate ? 'border-red-500' : 'border-gray-300'}`}
+              className={`w-full pl-10 px-4 py-2 border rounded-lg focus:ring-2 focus:border-blue-500 ${errors.endDate ? errorBorderClass : 'border-gray-300'} ${inputClass}`}
               min={formData.startDate}
             />
           </div>
-          {errors.endDate && <p className="mt-1 text-sm text-red-600">{errors.endDate}</p>}
+          {errors.endDate && <p className="mt-1 text-sm text-red-500">{errors.endDate}</p>}
         </div>
       </div>
 
-      <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-        <div className="flex items-center gap-2 text-blue-700 mb-2">
+      {/* Location Picker - Full Width */}
+      <div className="mt-6">
+        <MapPicker 
+          position={formData.location} 
+          setPosition={setLocation}
+          darkMode={darkMode}
+        />
+      </div>
+
+      <div className={`mt-6 p-4 rounded-lg border ${infoBoxClass}`}>
+        <div className="flex items-center gap-2 mb-2">
           <CheckCircle size={18} />
           <span className="font-medium">Note:</span>
         </div>
-        <p className="text-sm text-blue-600">
-          Contract value will be automatically calculated from BoQ items. You can add BoQ items after creating the project.
+        <p className="text-sm">
+          • Contract value will be automatically calculated from BoQ items.<br/>
+          • You can add BoQ items after creating the project.<br/>
+          • Set project location using the map above or use current location.<br/>
+          • Photos can be added in weekly reports.
         </p>
       </div>
 
-      <div className="flex gap-3 mt-8 pt-6 border-t">
+      <div className="flex gap-3 mt-8 pt-6 border-t border-gray-700">
         <button
           onClick={handleSubmit}
           disabled={isSaving}
@@ -305,7 +609,9 @@ const ProjectForm = React.memo(({ existing, onSave, onCancel }) => {
         <button
           onClick={onCancel}
           disabled={isSaving}
-          className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+          className={`px-6 py-3 border rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 ${
+            darkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+          }`}
         >
           Cancel
         </button>
@@ -317,12 +623,12 @@ const ProjectForm = React.memo(({ existing, onSave, onCancel }) => {
 ProjectForm.displayName = 'ProjectForm';
 
 // Nav Component
-const Nav = React.memo(({ view, setView, projectsLength, exportData, importData }) => {
+const Nav = React.memo(({ view, setView, projectsLength, exportData, importData, darkMode, toggleDarkMode }) => {
   const handleSetViewSummary = useCallback(() => setView('summary'), [setView]);
   const handleSetViewAdd = useCallback(() => setView('add'), [setView]);
 
   return (
-    <nav className="bg-gradient-to-r from-blue-700 to-blue-800 text-white p-4 mb-6 shadow-lg">
+    <nav className={`p-4 mb-6 shadow-lg ${darkMode ? 'bg-gradient-to-r from-gray-800 to-gray-900 text-white' : 'bg-gradient-to-r from-blue-700 to-blue-800 text-white'}`}>
       <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
         <div className="flex items-center gap-3">
           <BarChart3 size={28} />
@@ -330,8 +636,18 @@ const Nav = React.memo(({ view, setView, projectsLength, exportData, importData 
         </div>
         <div className="flex flex-wrap gap-2 justify-center">
           <button 
+            onClick={toggleDarkMode}
+            className={`px-3 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+              darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-blue-600 hover:bg-blue-700'
+            }`}
+            title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+          >
+            {darkMode ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+
+          <button 
             onClick={handleSetViewSummary} 
-            className={`px-4 py-2 rounded-lg transition-colors ${view === 'summary' ? 'bg-blue-900' : 'bg-blue-600 hover:bg-blue-700'}`}
+            className={`px-4 py-2 rounded-lg transition-colors ${view === 'summary' ? (darkMode ? 'bg-gray-700' : 'bg-blue-900') : (darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-blue-600 hover:bg-blue-700')}`}
           >
             Dashboard
           </button>
@@ -344,7 +660,9 @@ const Nav = React.memo(({ view, setView, projectsLength, exportData, importData 
           </button>
 
           <div className="flex gap-2">
-            <label className="cursor-pointer px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2">
+            <label className={`cursor-pointer px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+              darkMode ? 'bg-purple-700 hover:bg-purple-600' : 'bg-purple-600 hover:bg-purple-700'
+            }`}>
               <Upload size={18} /> Import
               <input 
                 type="file" 
@@ -357,7 +675,9 @@ const Nav = React.memo(({ view, setView, projectsLength, exportData, importData 
             <button 
               onClick={exportData} 
               disabled={projectsLength === 0}
-              className="px-4 py-2 bg-amber-600 rounded-lg hover:bg-amber-700 transition-colors flex items-center gap-2"
+              className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 ${
+                darkMode ? 'bg-amber-700 hover:bg-amber-600' : 'bg-amber-600 hover:bg-amber-700'
+              }`}
             >
               <Download size={18} /> Export
             </button>
@@ -377,6 +697,23 @@ function App() {
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('darkMode');
+    return saved ? JSON.parse(saved) : false;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('darkMode', JSON.stringify(darkMode));
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [darkMode]);
+
+  const toggleDarkMode = useCallback(() => {
+    setDarkMode(prev => !prev);
+  }, []);
 
   const loadProjects = useCallback(async () => {
     setLoading(true);
@@ -422,11 +759,10 @@ function App() {
 
   const saveProject = useCallback(async (project) => {
     try {
-      if (!project.name || !project.contractor || !project.supervisor) {
+      if (!project.name || !project.contractor || !project.supervisor || !project.length || !project.averageWidth) {
         throw new Error('Required fields missing');
       }
 
-      // Auto-calculate contract price from BoQ if BoQ exists
       let contractPrice = '0';
       if (project.boq && project.boq.length > 0) {
         contractPrice = calculateTotalFromBoQ(project.boq).toString();
@@ -435,6 +771,8 @@ function App() {
       const projectToSave = {
         ...project,
         contractPrice,
+        length: parseFloat(project.length) || 0,
+        averageWidth: parseFloat(project.averageWidth) || 0,
         id: project.id || `project_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         updatedAt: new Date().toISOString()
       };
@@ -471,9 +809,10 @@ function App() {
   const exportData = useCallback(async () => {
     try {
       const data = {
-        version: '1.1',
+        version: '1.3',
         exportDate: new Date().toISOString(),
-        projects: projects
+        projects: projects,
+        darkMode: darkMode
       };
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -488,7 +827,7 @@ function App() {
       console.error('Export failed:', e);
       alert('Export failed');
     }
-  }, [projects]);
+  }, [projects, darkMode]);
 
   const importData = useCallback(async (event) => {
     const file = event.target.files[0];
@@ -502,8 +841,8 @@ function App() {
       const text = await file.text();
       const data = JSON.parse(text);
       
-      if (data.version !== '1.1') {
-        throw new Error('Invalid file version');
+      if (!data.version || !data.version.startsWith('1.')) {
+        throw new Error('Invalid file version. Expected version 1.x');
       }
 
       if (!Array.isArray(data.projects)) {
@@ -515,12 +854,16 @@ function App() {
           await window.storage.set('project:' + project.id, JSON.stringify(project));
         }
       }
+
+      if (data.darkMode !== undefined) {
+        setDarkMode(data.darkMode);
+      }
       
       await loadProjects();
       alert('Import completed successfully!');
     } catch (e) {
       console.error('Import failed:', e);
-      alert('Import failed: Invalid file format');
+      alert(`Import failed: ${e.message}`);
     }
     
     event.target.value = '';
@@ -583,9 +926,12 @@ function App() {
             getProgress={getProgress}
             formatCurrency={formatCurrency}
             formatDate={formatDate}
+            formatLength={formatLength}
+            formatArea={formatArea}
             onViewDetail={handleViewDetail}
             onEditProject={handleEditProject}
             onReload={handleReload}
+            darkMode={darkMode}
           />
         );
       case 'add':
@@ -593,6 +939,7 @@ function App() {
           <ProjectForm 
             onSave={handleSaveSuccess}
             onCancel={handleFormCancel}
+            darkMode={darkMode}
           />
         );
       case 'edit':
@@ -601,6 +948,7 @@ function App() {
             existing={selected}
             onSave={handleSaveSuccess}
             onCancel={() => setView('detail')}
+            darkMode={darkMode}
           />
         ) : null;
       case 'detail':
@@ -612,8 +960,11 @@ function App() {
             onDelete={handleDeleteProject}
             formatCurrency={formatCurrency}
             formatDate={formatDate}
+            formatLength={formatLength}
+            formatArea={formatArea}
             calculateTotalFromBoQ={calculateTotalFromBoQ}
             getProgress={getProgress}
+            darkMode={darkMode}
           />
         ) : null;
       default:
@@ -624,27 +975,29 @@ function App() {
     getProgress, handleViewDetail, handleEditProject, 
     handleReload, handleSaveSuccess, handleFormCancel,
     handleEditInDetail, handleDeleteProject, loadProjects,
-    calculateTotalFromBoQ
+    calculateTotalFromBoQ, darkMode
   ]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 p-4 md:p-6">
+    <div className={`min-h-screen ${darkMode ? 'dark bg-gradient-to-b from-gray-900 to-black text-white' : 'bg-gradient-to-b from-gray-50 to-gray-100 text-gray-900'} p-4 md:p-6`}>
       <Nav
         view={view}
         setView={setView}
         projectsLength={projects.length}
         exportData={exportData}
         importData={importData}
+        darkMode={darkMode}
+        toggleDarkMode={toggleDarkMode}
       />
       <main>
         {currentView}
       </main>
       
-      <footer className="mt-12 pt-8 border-t border-gray-200 text-center">
-        <p className="text-gray-600 text-sm">
-          BM Progress Tracker v1.0
+      <footer className={`mt-12 pt-8 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'} text-center`}>
+        <p className={darkMode ? 'text-gray-400 text-sm' : 'text-gray-600 text-sm'}>
+          BM Progress Tracker v1.3
         </p>
-        <p className="text-gray-500 text-xs mt-2">
+        <p className={`text-xs mt-2 ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
           This work was done in assist of Claude Sonnet. All rights reserved. https://github.com/agungprsety
         </p>
       </footer>
@@ -660,9 +1013,12 @@ const Summary = React.memo(({
   getProgress, 
   formatCurrency, 
   formatDate,
+  formatLength,
+  formatArea,
   onViewDetail,
   onEditProject,
-  onReload 
+  onReload,
+  darkMode 
 }) => {
   const totalValue = useMemo(() => 
     projects.reduce((s, p) => s + Number(p.contractPrice || 0), 0), 
@@ -675,7 +1031,12 @@ const Summary = React.memo(({
       : 0,
     [projects, getProgress]
   );
-  
+
+  const totalLength = useMemo(() => 
+    projects.reduce((s, p) => s + (p.length || 0), 0),
+    [projects]
+  );
+
   const chartData = useMemo(() => 
     projects.map(p => ({
       name: p.name.length > 15 ? p.name.substring(0, 12) + '...' : p.name,
@@ -694,14 +1055,20 @@ const Summary = React.memo(({
     if (onReload) onReload();
   }, [onReload]);
 
+  const bgClass = darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800';
+  const cardBgClass = darkMode ? 'from-gray-800 to-gray-900 border-gray-700' : 'from-white to-gray-50 border-gray-100';
+  const tableHeaderClass = darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-50 text-gray-500';
+  const tableRowClass = darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50';
+  const borderClass = darkMode ? 'border-gray-700' : 'border-gray-200';
+
   return (
     <div className="max-w-7xl mx-auto">
       {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-red-600">{error}</p>
+        <div className={`mb-6 p-4 rounded-lg border ${darkMode ? 'bg-red-900/50 border-red-700 text-red-200' : 'bg-red-50 border-red-200 text-red-600'}`}>
+          <p>{error}</p>
           <button
             onClick={handleReload}
-            className="mt-2 text-sm text-red-700 underline"
+            className={`mt-2 text-sm ${darkMode ? 'text-red-300 underline' : 'text-red-700 underline'}`}
           >
             Try again
           </button>
@@ -709,43 +1076,55 @@ const Summary = React.memo(({
       )}
 
       {loading ? (
-        <LoadingSkeleton />
+        <LoadingSkeleton darkMode={darkMode} />
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div className="bg-gradient-to-br from-white to-blue-50 rounded-xl shadow-lg p-6 border border-blue-100">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div className={`bg-gradient-to-br rounded-xl shadow-lg p-6 border ${cardBgClass}`}>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600 font-medium">Total Projects</p>
-                  <p className="text-4xl font-bold text-gray-800 mt-2">{projects.length}</p>
+                  <p className={`text-sm font-medium mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Total Projects</p>
+                  <p className={`text-4xl font-bold ${darkMode ? 'text-white' : 'text-gray-800'} mt-2`}>{projects.length}</p>
                 </div>
-                <div className="p-3 bg-blue-100 rounded-lg">
-                  <BarChart3 className="text-blue-600" size={28} />
+                <div className={`p-3 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-blue-100'}`}>
+                  <BarChart3 className={darkMode ? 'text-blue-400' : 'text-blue-600'} size={28} />
                 </div>
               </div>
             </div>
 
-            <div className="bg-gradient-to-br from-white to-emerald-50 rounded-xl shadow-lg p-6 border border-emerald-100">
+            <div className={`bg-gradient-to-br rounded-xl shadow-lg p-6 border ${cardBgClass}`}>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600 font-medium">Total Contract Value</p>
-                  <p className="text-lg font-bold text-gray-800 mt-2">{formatCurrency(totalValue)}</p>
+                  <p className={`text-sm font-medium mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Total Contract Value</p>
+                  <p className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-gray-800'} mt-2`}>{formatCurrency(totalValue)}</p>
                 </div>
-                <div className="p-3 bg-emerald-100 rounded-lg">
-                  <div className="text-emerald-600 font-bold">IDR</div>
+                <div className={`p-3 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-emerald-100'}`}>
+                  <div className={darkMode ? 'text-emerald-400 font-bold' : 'text-emerald-600 font-bold'}>IDR</div>
                 </div>
               </div>
             </div>
 
-            <div className="bg-gradient-to-br from-white to-amber-50 rounded-xl shadow-lg p-6 border border-amber-100">
+            <div className={`bg-gradient-to-br rounded-xl shadow-lg p-6 border ${cardBgClass}`}>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600 font-medium">Average Progress</p>
-                  <p className="text-4xl font-bold text-gray-800 mt-2">{avgProgress.toFixed(1)}%</p>
+                  <p className={`text-sm font-medium mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Total Length</p>
+                  <p className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-gray-800'} mt-2`}>{formatLength(totalLength)}</p>
+                </div>
+                <div className={`p-3 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-amber-100'}`}>
+                  <div className={darkMode ? 'text-amber-400 font-bold' : 'text-amber-600 font-bold'}>m/km</div>
+                </div>
+              </div>
+            </div>
+
+            <div className={`bg-gradient-to-br rounded-xl shadow-lg p-6 border ${cardBgClass}`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className={`text-sm font-medium mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Average Progress</p>
+                  <p className={`text-4xl font-bold ${darkMode ? 'text-white' : 'text-gray-800'} mt-2`}>{avgProgress.toFixed(1)}%</p>
                 </div>
                 <div className="relative w-16 h-16">
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="text-amber-600 font-bold">{avgProgress.toFixed(0)}%</div>
+                    <div className={darkMode ? 'text-amber-400 font-bold' : 'text-amber-600 font-bold'}>{avgProgress.toFixed(0)}%</div>
                   </div>
                   <svg className="w-16 h-16 transform -rotate-90">
                     <circle
@@ -755,7 +1134,7 @@ const Summary = React.memo(({
                       stroke="currentColor"
                       strokeWidth="4"
                       fill="none"
-                      className="text-amber-200"
+                      className={darkMode ? 'text-gray-700' : 'text-amber-200'}
                     />
                     <circle
                       cx="32"
@@ -766,7 +1145,7 @@ const Summary = React.memo(({
                       fill="none"
                       strokeDasharray={175.93}
                       strokeDashoffset={175.93 * (1 - avgProgress / 100)}
-                      className="text-amber-600"
+                      className={darkMode ? 'text-amber-500' : 'text-amber-600'}
                     />
                   </svg>
                 </div>
@@ -775,18 +1154,19 @@ const Summary = React.memo(({
           </div>
 
           {projects.length > 0 && (
-            <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-              <h2 className="text-xl font-bold text-gray-800 mb-4">Progress Overview</h2>
+            <div className={`rounded-xl shadow-lg p-6 mb-8 ${bgClass}`}>
+              <h2 className="text-xl font-bold mb-4">Progress Overview</h2>
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "#374151" : "#f0f0f0"} />
                     <XAxis 
                       dataKey="name" 
                       angle={-45} 
                       textAnchor="end" 
                       height={80}
                       tick={{ fontSize: 12 }}
+                      stroke={darkMode ? "#9CA3AF" : "#374151"}
                     />
                     <YAxis 
                       domain={[0, 100]} 
@@ -795,9 +1175,10 @@ const Summary = React.memo(({
                         angle: -90, 
                         position: 'insideLeft',
                         offset: 10,
-                        style: { textAnchor: 'middle' }
+                        style: { textAnchor: 'middle', fill: darkMode ? '#9CA3AF' : '#374151' }
                       }}
                       tick={{ fontSize: 12 }}
+                      stroke={darkMode ? "#9CA3AF" : "#374151"}
                     />
                     <Tooltip 
                       formatter={(value) => [`${value}%`, 'Progress']}
@@ -805,13 +1186,15 @@ const Summary = React.memo(({
                       contentStyle={{ 
                         borderRadius: '8px',
                         border: 'none',
+                        backgroundColor: darkMode ? '#1F2937' : 'white',
+                        color: darkMode ? 'white' : '#374151',
                         boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                       }}
                     />
                     <Bar 
                       dataKey="progress" 
                       name="Progress" 
-                      fill="#3b82f6"
+                      fill={darkMode ? "#3B82F6" : "#3b82f6"}
                       radius={[4, 4, 0, 0]}
                     />
                   </BarChart>
@@ -820,19 +1203,19 @@ const Summary = React.memo(({
             </div>
           )}
 
-          <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
-              <h2 className="text-xl font-bold text-gray-800">All Projects</h2>
-              <p className="text-sm text-gray-600 mt-1">{projects.length} project(s) found</p>
+          <div className={`rounded-xl shadow-lg overflow-hidden ${bgClass}`}>
+            <div className={`px-6 py-4 border-b ${borderClass} ${darkMode ? 'bg-gradient-to-r from-gray-800 to-gray-900' : 'bg-gradient-to-r from-gray-50 to-white'}`}>
+              <h2 className="text-xl font-bold">All Projects</h2>
+              <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{projects.length} project(s) found</p>
             </div>
             
             {projects.length === 0 ? (
               <div className="text-center py-16">
-                <div className="text-gray-400 mb-4">
+                <div className={darkMode ? 'text-gray-500 mb-4' : 'text-gray-400 mb-4'}>
                   <BarChart3 size={64} className="mx-auto" />
                 </div>
-                <h3 className="text-lg font-medium text-gray-600 mb-2">No projects yet</h3>
-                <p className="text-gray-500 mb-6">Get started by creating your first project</p>
+                <h3 className={`text-lg font-medium mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>No projects yet</h3>
+                <p className={darkMode ? 'text-gray-500 mb-6' : 'text-gray-500 mb-6'}>Get started by creating your first project</p>
                 <button
                   onClick={() => onViewDetail && onViewDetail(null)}
                   className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all font-medium"
@@ -843,46 +1226,74 @@ const Summary = React.memo(({
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-gray-50">
+                  <thead className={tableHeaderClass}>
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Project</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contractor</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dates</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Value</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Progress</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Project</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Length</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Location</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Contractor</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Dates</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Value</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Progress</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
+                  <tbody className={`divide-y ${borderClass}`}>
                     {projectsByProgress.map(p => (
-                      <tr key={p.id} className="hover:bg-gray-50 transition-colors">
+                      <tr key={p.id} className={`transition-colors ${tableRowClass}`}>
                         <td className="px-6 py-4">
-                          <div className="font-medium text-gray-900">{p.name}</div>
-                          <div className="text-sm text-gray-500 capitalize">{p.workType?.replace('-', ' ') || ''}</div>
+                          <div className="font-medium">{p.name}</div>
+                          <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'} capitalize`}>{p.workType?.replace('-', ' ') || ''}</div>
+                          <div className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                            Photos: {p.photos?.length || 0}
+                          </div>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="text-sm text-gray-900">{p.contractor}</div>
-                          <div className="text-sm text-gray-500">{p.supervisor}</div>
+                          <div className="font-medium">{formatLength(p.length)}</div>
+                          <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                            {p.averageWidth ? `Width: ${p.averageWidth}m` : ''}
+                          </div>
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-600">
+                        <td className="px-6 py-4">
+                          {p.location ? (
+                            <div className="text-sm">
+                              <div className="flex items-center gap-1">
+                                <MapPin size={12} className={darkMode ? 'text-blue-400' : 'text-blue-600'} />
+                                <span className={darkMode ? 'text-gray-300' : 'text-gray-700'}>
+                                  {p.location[0].toFixed(4)}, {p.location[1].toFixed(4)}
+                                </span>
+                              </div>
+                              <div className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'} mt-1`}>
+                                GPS Coordinates
+                              </div>
+                            </div>
+                          ) : (
+                            <span className={`text-sm ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>No location</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm">{p.contractor}</div>
+                          <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{p.supervisor}</div>
+                        </td>
+                        <td className="px-6 py-4 text-sm">
                           <div>{formatDate(p.startDate)}</div>
-                          <div className="text-gray-400">to</div>
+                          <div className={darkMode ? 'text-gray-500' : 'text-gray-400'}>to</div>
                           <div>{formatDate(p.endDate)}</div>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="text-sm font-medium text-gray-900">{formatCurrency(p.contractPrice)}</div>
+                          <div className="text-sm font-medium">{formatCurrency(p.contractPrice)}</div>
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             <div className="flex-1 max-w-xs">
-                              <div className="bg-gray-200 rounded-full h-2.5">
+                              <div className={darkMode ? 'bg-gray-700' : 'bg-gray-200'} style={{ height: '10px', borderRadius: '9999px' }}>
                                 <div 
-                                  className="bg-gradient-to-r from-blue-500 to-blue-600 h-2.5 rounded-full transition-all duration-500"
+                                  className="bg-gradient-to-r from-blue-500 to-blue-600 h-full rounded-full transition-all duration-500"
                                   style={{ width: `${getProgress(p)}%` }}
                                 ></div>
                               </div>
                             </div>
-                            <span className="font-bold text-gray-700 min-w-[60px] text-right">
+                            <span className="font-bold min-w-[60px] text-right">
                               {getProgress(p).toFixed(1)}%
                             </span>
                           </div>
@@ -891,13 +1302,13 @@ const Summary = React.memo(({
                           <div className="flex gap-2">
                             <button
                               onClick={() => onViewDetail && onViewDetail(p)}
-                              className="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
+                              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${darkMode ? 'bg-blue-900/50 text-blue-300 hover:bg-blue-900' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}
                             >
                               View
                             </button>
                             <button
                               onClick={() => onEditProject && onEditProject(p)}
-                              className="px-4 py-2 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 transition-colors text-sm font-medium"
+                              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${darkMode ? 'bg-amber-900/50 text-amber-300 hover:bg-amber-900' : 'bg-amber-50 text-amber-600 hover:bg-amber-100'}`}
                             >
                               Edit
                             </button>
@@ -920,7 +1331,7 @@ Summary.displayName = 'Summary';
 
 // ==================== BoQ COMPONENT (UPDATED) ====================
 
-const BoQ = React.memo(({ project, onUpdate }) => {
+const BoQ = React.memo(({ project, onUpdate, darkMode }) => {
   const [items, setItems] = useState(project.boq || []);
   const [newItem, setNewItem] = useState({
     description: '',
@@ -955,9 +1366,8 @@ const BoQ = React.memo(({ project, onUpdate }) => {
       quantity: Number(newItem.quantity),
       unit: newItem.unit,
       unitPrice: Number(newItem.unitPrice),
-      total: Number(newItem.quantity) * Number(newItem.unitPrice), // Auto-calculate total
-      completed: 0,
-      remaining: Number(newItem.quantity) // Initialize remaining quantity
+      total: Number(newItem.quantity) * Number(newItem.unitPrice),
+      completed: 0
     };
 
     const updatedItems = [...items, item];
@@ -972,14 +1382,28 @@ const BoQ = React.memo(({ project, onUpdate }) => {
     saveBoQ(updatedItems);
   }, [items]);
 
-  const updateCompleted = useCallback((id, completed) => {
+  const updateUnitPrice = useCallback((id, unitPrice) => {
     const updatedItems = items.map(item => {
       if (item.id === id) {
-        const completedQty = Math.min(Math.max(0, completed), item.quantity);
         return {
           ...item,
-          completed: completedQty,
-          remaining: item.quantity - completedQty
+          unitPrice: Number(unitPrice),
+          total: item.quantity * Number(unitPrice)
+        };
+      }
+      return item;
+    });
+    setItems(updatedItems);
+    saveBoQ(updatedItems);
+  }, [items]);
+
+  const updateQuantity = useCallback((id, quantity) => {
+    const updatedItems = items.map(item => {
+      if (item.id === id) {
+        return {
+          ...item,
+          quantity: Number(quantity),
+          total: Number(quantity) * item.unitPrice
         };
       }
       return item;
@@ -1012,17 +1436,24 @@ const BoQ = React.memo(({ project, onUpdate }) => {
   const handleUnitPriceChange = useCallback((e) => 
     setNewItem(prev => ({ ...prev, unitPrice: e.target.value })), []);
 
+  const bgClass = darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800';
+  const inputClass = darkMode 
+    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500' 
+    : 'border-gray-300 text-gray-700 placeholder-gray-500 focus:ring-blue-500 focus:border-blue-500';
+  const tableHeaderClass = darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-50 text-gray-500';
+  const tableRowClass = darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50';
+
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+    <div className={`rounded-xl shadow-lg p-6 mb-6 ${bgClass}`}>
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h3 className="text-xl font-bold text-gray-800">Bill of Quantities (BoQ)</h3>
-          <p className="text-sm text-gray-600 mt-1">
+          <h3 className="text-xl font-bold">Bill of Quantities (BoQ)</h3>
+          <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
             Contract Value: <span className="font-bold text-blue-600">{formatCurrency(totalValue)}</span>
             {totalValue > 0 && (
               <span className="ml-4">
-                Completed: <span className="font-bold text-green-600">{formatCurrency(completedValue)}</span>
-                <span className="text-gray-500 ml-2">
+                Completed Value: <span className="font-bold text-green-600">{formatCurrency(completedValue)}</span>
+                <span className={darkMode ? 'text-gray-500 ml-2' : 'text-gray-500 ml-2'}>
                   ({totalValue > 0 ? ((completedValue / totalValue) * 100).toFixed(1) : 0}%)
                 </span>
               </span>
@@ -1038,20 +1469,20 @@ const BoQ = React.memo(({ project, onUpdate }) => {
       </div>
 
       {/* Add Item Form */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-6 p-4 bg-gray-50 rounded-lg">
+      <div className={`grid grid-cols-1 md:grid-cols-5 gap-3 mb-6 p-4 rounded-lg ${darkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
         <input
           type="text"
           placeholder="Description (e.g., Asphalt)"
           value={newItem.description}
           onChange={handleDescriptionChange}
-          className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          className={`px-3 py-2 border rounded-md text-sm focus:ring-2 focus:border-blue-500 ${inputClass}`}
         />
         <input
           type="number"
           placeholder="Quantity"
           value={newItem.quantity}
           onChange={handleQuantityChange}
-          className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          className={`px-3 py-2 border rounded-md text-sm focus:ring-2 focus:border-blue-500 ${inputClass}`}
           min="0"
           step="0.01"
         />
@@ -1060,14 +1491,14 @@ const BoQ = React.memo(({ project, onUpdate }) => {
           placeholder="Unit (ton, m³, etc)"
           value={newItem.unit}
           onChange={handleUnitChange}
-          className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          className={`px-3 py-2 border rounded-md text-sm focus:ring-2 focus:border-blue-500 ${inputClass}`}
         />
         <input
           type="number"
           placeholder="Unit Price"
           value={newItem.unitPrice}
           onChange={handleUnitPriceChange}
-          className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          className={`px-3 py-2 border rounded-md text-sm focus:ring-2 focus:border-blue-500 ${inputClass}`}
           min="0"
           step="1000"
         />
@@ -1081,62 +1512,79 @@ const BoQ = React.memo(({ project, onUpdate }) => {
 
       {/* BoQ Table */}
       {items.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 rounded-lg">
-          <div className="text-gray-400 mb-4">
+        <div className={`text-center py-12 rounded-lg ${darkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
+          <div className={darkMode ? 'text-gray-500 mb-4' : 'text-gray-400 mb-4'}>
             <BarChart3 size={48} className="mx-auto" />
           </div>
-          <h4 className="text-lg font-medium text-gray-600 mb-2">No BoQ Items Yet</h4>
-          <p className="text-gray-500 mb-4">Add your first BoQ item to start tracking progress</p>
+          <h4 className={`text-lg font-medium mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>No BoQ Items Yet</h4>
+          <p className={darkMode ? 'text-gray-500 mb-4' : 'text-gray-500 mb-4'}>Add your first BoQ item to start tracking progress</p>
         </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50">
+            <thead className={tableHeaderClass}>
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit Price</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Completed</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Remaining</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Description</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Quantity</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Unit</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Unit Price</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Total</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Completed</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Remaining</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody className={`divide-y ${darkMode ? 'divide-gray-700' : 'divide-gray-200'}`}>
               {items.map(item => {
                 const itemTotal = item.quantity * item.unitPrice;
-                const itemCompletedValue = (item.completed || 0) * item.unitPrice;
-                const progressPercentage = item.quantity > 0 ? ((item.completed || 0) / item.quantity) * 100 : 0;
+                const completedQty = item.completed || 0;
+                const remainingQty = item.quantity - completedQty;
+                const progressPercentage = item.quantity > 0 ? (completedQty / item.quantity) * 100 : 0;
                 
                 return (
-                  <tr key={item.id} className="hover:bg-gray-50">
+                  <tr key={item.id} className={tableRowClass}>
                     <td className="px-4 py-3">
-                      <div className="font-medium text-gray-900">{item.description}</div>
+                      <div className="font-medium">{item.description}</div>
                     </td>
-                    <td className="px-4 py-3 text-gray-700">{item.quantity.toLocaleString()}</td>
+                    <td className="px-4 py-3">
+                      <input
+                        type="number"
+                        value={item.quantity}
+                        onChange={(e) => updateQuantity(item.id, e.target.value)}
+                        className={`w-24 px-2 py-1 border rounded text-sm ${inputClass}`}
+                        min="0"
+                        step="0.01"
+                      />
+                    </td>
                     <td className="px-4 py-3">{item.unit}</td>
-                    <td className="px-4 py-3 font-medium">{formatCurrency(item.unitPrice)}</td>
+                    <td className="px-4 py-3">
+                      <input
+                        type="number"
+                        value={item.unitPrice}
+                        onChange={(e) => updateUnitPrice(item.id, e.target.value)}
+                        className={`w-32 px-2 py-1 border rounded text-sm ${inputClass}`}
+                        min="0"
+                        step="1000"
+                      />
+                    </td>
                     <td className="px-4 py-3 font-bold text-blue-600">{formatCurrency(itemTotal)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          value={item.completed || 0}
-                          onChange={(e) => updateCompleted(item.id, parseFloat(e.target.value))}
-                          className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
-                          min="0"
-                          max={item.quantity}
-                          step="0.01"
-                        />
-                        <span className="text-gray-600 text-sm">{item.unit}</span>
+                        <span className={darkMode ? 'text-green-400' : 'text-green-600'}>{completedQty.toLocaleString()}</span>
+                        <span className={darkMode ? 'text-gray-400' : 'text-gray-500'}>{item.unit}</span>
                       </div>
-                      <div className="text-xs text-gray-500 mt-1">
+                      <div className={`text-xs mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                         {progressPercentage.toFixed(1)}% complete
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="text-gray-700">{(item.remaining || item.quantity).toLocaleString()} {item.unit}</div>
+                      <div className="flex items-center gap-2">
+                        <span className={darkMode ? 'text-amber-400' : 'text-amber-600'}>{remainingQty.toLocaleString()}</span>
+                        <span className={darkMode ? 'text-gray-400' : 'text-gray-500'}>{item.unit}</span>
+                      </div>
+                      <div className={`text-xs mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        {((remainingQty / item.quantity) * 100).toFixed(1)}% remaining
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <button
@@ -1151,12 +1599,19 @@ const BoQ = React.memo(({ project, onUpdate }) => {
                 );
               })}
             </tbody>
-            <tfoot className="bg-gray-50 font-bold">
+            <tfoot className={tableHeaderClass}>
               <tr>
-                <td colSpan="4" className="px-4 py-3 text-right">TOTAL CONTRACT VALUE:</td>
-                <td className="px-4 py-3 text-blue-600">{formatCurrency(totalValue)}</td>
-                <td colSpan="2" className="px-4 py-3 text-green-600">
-                  Completed: {formatCurrency(completedValue)} ({totalValue > 0 ? ((completedValue / totalValue) * 100).toFixed(1) : 0}%)
+                <td colSpan="3" className="px-4 py-3 text-right font-bold">TOTAL CONTRACT VALUE:</td>
+                <td colSpan="2" className="px-4 py-3">
+                  <span className="text-blue-600 font-bold">{formatCurrency(totalValue)}</span>
+                  <div className={`text-sm mt-1 ${darkMode ? 'text-green-400' : 'text-green-600'}`}>
+                    Completed Value: {formatCurrency(completedValue)} ({totalValue > 0 ? ((completedValue / totalValue) * 100).toFixed(1) : 0}%)
+                  </div>
+                </td>
+                <td colSpan="2" className="px-4 py-3">
+                  <div className={`text-sm ${darkMode ? 'text-amber-400' : 'text-amber-600'}`}>
+                    Remaining Value: {formatCurrency(totalValue - completedValue)}
+                  </div>
                 </td>
                 <td></td>
               </tr>
@@ -1170,16 +1625,144 @@ const BoQ = React.memo(({ project, onUpdate }) => {
 
 BoQ.displayName = 'BoQ';
 
+// Photo Upload Component
+const PhotoUpload = React.memo(({ photos, setPhotos, darkMode }) => {
+  const fileInputRef = useRef(null);
+
+  const handlePhotoUpload = (event) => {
+    const files = Array.from(event.target.files);
+    if (files.length === 0) return;
+
+    // Limit number of photos
+    if (photos.length + files.length > 10) {
+      alert('Maximum 10 photos allowed per weekly report');
+      return;
+    }
+
+    files.forEach(file => {
+      if (!file.type.startsWith('image/')) {
+        alert('Please upload only image files');
+        return;
+      }
+
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image size should be less than 5MB');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const newPhoto = {
+          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+          dataUrl: e.target.result,
+          filename: file.name,
+          size: file.size,
+          type: file.type,
+          uploadedAt: new Date().toISOString(),
+          description: ''
+        };
+        setPhotos(prev => [...prev, newPhoto]);
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // Reset file input
+    event.target.value = '';
+  };
+
+  const removePhoto = (id) => {
+    setPhotos(prev => prev.filter(photo => photo.id !== id));
+  };
+
+  const updateDescription = (id, description) => {
+    setPhotos(prev => prev.map(photo => 
+      photo.id === id ? { ...photo, description } : photo
+    ));
+  };
+
+  const triggerFileInput = () => {
+    fileInputRef.current.click();
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+          Photos ({photos.length}/10)
+        </label>
+        <button
+          type="button"
+          onClick={triggerFileInput}
+          className="flex items-center gap-2 bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 text-sm"
+        >
+          <Camera size={14} /> Add Photos
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          onChange={handlePhotoUpload}
+          className="hidden"
+        />
+      </div>
+
+      {photos.length === 0 ? (
+        <div className={`text-center py-8 rounded-lg border-2 border-dashed ${darkMode ? 'border-gray-600 bg-gray-700/30' : 'border-gray-300 bg-gray-50'}`}>
+          <Camera className={`h-12 w-12 mx-auto mb-4 ${darkMode ? 'text-gray-500' : 'text-gray-400'}`} />
+          <p className={darkMode ? 'text-gray-400' : 'text-gray-500'}>No photos added yet</p>
+          <p className={`text-sm mt-1 ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>Upload photos of this week's work</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          {photos.map(photo => (
+            <div key={photo.id} className={`rounded-lg overflow-hidden border ${darkMode ? 'border-gray-600' : 'border-gray-200'}`}>
+              <div className="relative aspect-square">
+                <img 
+                  src={photo.dataUrl} 
+                  alt={photo.description || 'Weekly report photo'}
+                  className="w-full h-full object-cover"
+                />
+                <button
+                  onClick={() => removePhoto(photo.id)}
+                  className="absolute top-2 right-2 bg-red-600 text-white p-1 rounded-full hover:bg-red-700"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="p-2">
+                <input
+                  type="text"
+                  value={photo.description}
+                  onChange={(e) => updateDescription(photo.id, e.target.value)}
+                  placeholder="Add description..."
+                  className={`w-full px-2 py-1 text-sm border rounded ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-700'}`}
+                />
+                <div className={`text-xs mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  {photo.filename} • {(photo.size / 1024 / 1024).toFixed(2)}MB
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+});
+
+PhotoUpload.displayName = 'PhotoUpload';
+
 // ==================== Weekly Reports Component (UPDATED) ====================
 
-const Weekly = React.memo(({ project, onUpdate }) => {
+const Weekly = React.memo(({ project, onUpdate, darkMode }) => {
   const [reports, setReports] = useState(project.weeklyReports || []);
   const [showModal, setShowModal] = useState(false);
   const [newReport, setNewReport] = useState({
     weekNumber: '',
     date: '',
     notes: '',
-    workItems: []
+    workItems: [],
+    photos: []
   });
 
   const boqItems = project.boq || [];
@@ -1195,18 +1778,19 @@ const Weekly = React.memo(({ project, onUpdate }) => {
     }
 
     setNewReport({
-      weekNumber: reports.length + 1,
+      weekNumber: reports.length > 0 ? Math.max(...reports.map(r => r.weekNumber)) + 1 : 1,
       date: new Date().toISOString().split('T')[0],
       notes: '',
-      workItems: []
+      workItems: [{ boqItemId: '', qtyCompleted: '', description: '' }],
+      photos: []
     });
     setShowModal(true);
-  }, [boqItems.length, reports.length]);
+  }, [boqItems.length, reports]);
 
   const addWorkItem = useCallback(() => {
     setNewReport(prev => ({
       ...prev,
-      workItems: [...prev.workItems, { boqItemId: '', qtyCompleted: '' }]
+      workItems: [...prev.workItems, { boqItemId: '', qtyCompleted: '', description: '' }]
     }));
   }, []);
 
@@ -1223,6 +1807,10 @@ const Weekly = React.memo(({ project, onUpdate }) => {
       ...prev,
       workItems: prev.workItems.filter((_, i) => i !== index)
     }));
+  }, []);
+
+  const setPhotos = useCallback((photos) => {
+    setNewReport(prev => ({ ...prev, photos }));
   }, []);
 
   // Calculate weekly progress using BoQ items
@@ -1280,9 +1868,19 @@ const Weekly = React.memo(({ project, onUpdate }) => {
       const boqItem = updatedBoq.find(item => item.id === workItem.boqItemId);
       if (boqItem) {
         boqItem.completed = (boqItem.completed || 0) + parseFloat(workItem.qtyCompleted);
-        boqItem.remaining = boqItem.quantity - boqItem.completed;
       }
     });
+
+    // Add project ID and week number to photos
+    const photosWithMetadata = newReport.photos.map(photo => ({
+      ...photo,
+      projectId: project.id,
+      weekNumber: parseInt(newReport.weekNumber),
+      date: newReport.date
+    }));
+
+    // Update project photos
+    const updatedPhotos = [...(project.photos || []), ...photosWithMetadata];
 
     const report = {
       id: Date.now().toString(),
@@ -1293,6 +1891,7 @@ const Weekly = React.memo(({ project, onUpdate }) => {
         ...item,
         qtyCompleted: parseFloat(item.qtyCompleted)
       })),
+      photos: photosWithMetadata,
       weeklyProgress: weeklyProgress,
       cumulativeProgress: cumulativeProgress,
       createdAt: new Date().toISOString()
@@ -1304,6 +1903,7 @@ const Weekly = React.memo(({ project, onUpdate }) => {
       ...project,
       weeklyReports: updatedReports,
       boq: updatedBoq,
+      photos: updatedPhotos,
       updatedAt: new Date().toISOString()
     };
 
@@ -1314,7 +1914,7 @@ const Weekly = React.memo(({ project, onUpdate }) => {
   }, [newReport, boqItems, calculateWeeklyProgress, reports, project, onUpdate]);
 
   const deleteWeeklyReport = useCallback(async (reportId) => {
-    if (!window.confirm('Delete this weekly report? This will recalculate all progress.')) return;
+    if (!window.confirm('Delete this weekly report? This will also delete associated photos and recalculate all progress.')) return;
 
     const reportToDelete = reports.find(r => r.id === reportId);
     if (!reportToDelete) return;
@@ -1322,9 +1922,13 @@ const Weekly = React.memo(({ project, onUpdate }) => {
     // Reset BoQ completed quantities and recalculate from scratch
     const updatedBoq = boqItems.map(item => ({
       ...item,
-      completed: 0,
-      remaining: item.quantity
+      completed: 0
     }));
+
+    // Remove photos from this report
+    const remainingPhotos = project.photos?.filter(photo => 
+      !reportToDelete.photos?.some(reportPhoto => reportPhoto.id === photo.id)
+    ) || [];
 
     const remainingReports = reports.filter(r => r.id !== reportId);
     
@@ -1336,7 +1940,6 @@ const Weekly = React.memo(({ project, onUpdate }) => {
         const boqItem = updatedBoq.find(item => item.id === workItem.boqItemId);
         if (boqItem) {
           boqItem.completed += workItem.qtyCompleted;
-          boqItem.remaining = boqItem.quantity - boqItem.completed;
           weeklyValue += workItem.qtyCompleted * boqItem.unitPrice;
         }
       });
@@ -1355,6 +1958,7 @@ const Weekly = React.memo(({ project, onUpdate }) => {
       ...project,
       weeklyReports: recalculatedReports,
       boq: updatedBoq,
+      photos: remainingPhotos,
       updatedAt: new Date().toISOString()
     };
 
@@ -1377,15 +1981,26 @@ const Weekly = React.memo(({ project, onUpdate }) => {
   
   const handleWorkItemQtyChange = useCallback((index, e) => 
     updateWorkItem(index, 'qtyCompleted', e.target.value), [updateWorkItem]);
+  
+  const handleWorkItemDescChange = useCallback((index, e) => 
+    updateWorkItem(index, 'description', e.target.value), [updateWorkItem]);
 
   const closeModal = useCallback(() => setShowModal(false), []);
 
+  const bgClass = darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800';
+  const inputClass = darkMode 
+    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500' 
+    : 'border-gray-300 text-gray-700 placeholder-gray-500 focus:ring-blue-500 focus:border-blue-500';
+  const tableHeaderClass = darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-50 text-gray-500';
+  const tableRowClass = darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50';
+  const borderClass = darkMode ? 'border-gray-700' : 'border-gray-200';
+
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+    <div className={`rounded-xl shadow-lg p-6 mb-6 ${bgClass}`}>
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h3 className="text-xl font-bold text-gray-800">Weekly Reports</h3>
-          <p className="text-sm text-gray-600 mt-1">
+          <h3 className="text-xl font-bold">Weekly Reports</h3>
+          <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
             Progress is automatically calculated from completed BoQ items
           </p>
         </div>
@@ -1398,12 +2013,12 @@ const Weekly = React.memo(({ project, onUpdate }) => {
       </div>
 
       {reports.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 rounded-lg">
-          <div className="text-gray-400 mb-4">
+        <div className={`text-center py-12 rounded-lg ${darkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
+          <div className={darkMode ? 'text-gray-500 mb-4' : 'text-gray-400 mb-4'}>
             <Calendar size={48} className="mx-auto" />
           </div>
-          <h4 className="text-lg font-medium text-gray-600 mb-2">No Weekly Reports Yet</h4>
-          <p className="text-gray-500 mb-4">Add your first weekly report to track progress over time</p>
+          <h4 className={`text-lg font-medium mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>No Weekly Reports Yet</h4>
+          <p className={darkMode ? 'text-gray-500 mb-4' : 'text-gray-500 mb-4'}>Add your first weekly report to track progress over time</p>
           <button
             onClick={openModal}
             className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -1414,35 +2029,34 @@ const Weekly = React.memo(({ project, onUpdate }) => {
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50">
+            <thead className={tableHeaderClass}>
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Week</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Work Items</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Weekly Progress</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cumulative Progress</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Notes</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Week</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Date</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Work Items</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Photos</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Completed Qty</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Weekly Progress</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Cumulative Progress</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Notes</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody className={`divide-y ${borderClass}`}>
               {reports.map(report => (
-                <tr key={report.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-bold text-gray-900">Week {report.weekNumber}</td>
-                  <td className="px-4 py-3 text-gray-700">{formatDate(report.date)}</td>
+                <tr key={report.id} className={tableRowClass}>
+                  <td className="px-4 py-3 font-bold">Week {report.weekNumber}</td>
+                  <td className="px-4 py-3">{formatDate(report.date)}</td>
                   <td className="px-4 py-3">
                     <div className="text-sm">
                       {report.workItems.length} item(s)
                       {report.workItems.length > 0 && (
-                        <div className="text-xs text-gray-500 mt-1">
+                        <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mt-1`}>
                           {report.workItems.slice(0, 2).map((workItem, idx) => {
                             const boqItem = boqItems.find(item => item.id === workItem.boqItemId);
                             return boqItem ? (
                               <div key={idx} className="truncate">
-                                {boqItem.description}: {workItem.qtyCompleted} {boqItem.unit}
-                                <div className="text-xs text-blue-600">
-                                  = {formatCurrency(workItem.qtyCompleted * boqItem.unitPrice)}
-                                </div>
+                                {boqItem.description}
                               </div>
                             ) : null;
                           })}
@@ -1454,8 +2068,28 @@ const Weekly = React.memo(({ project, onUpdate }) => {
                     </div>
                   </td>
                   <td className="px-4 py-3">
+                    <div className="text-sm">
+                      {report.photos?.length || 0} photo(s)
+                      {report.photos && report.photos.length > 0 && (
+                        <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mt-1`}>
+                          Click to view
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    {report.workItems.map((workItem, idx) => {
+                      const boqItem = boqItems.find(item => item.id === workItem.boqItemId);
+                      return boqItem ? (
+                        <div key={idx} className="text-sm mb-1">
+                          {workItem.qtyCompleted.toLocaleString()} {boqItem.unit}
+                        </div>
+                      ) : null;
+                    })}
+                  </td>
+                  <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <div className={`px-2 py-1 rounded-full text-xs font-bold ${report.weeklyProgress > 0 ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                      <div className={`px-2 py-1 rounded-full text-xs font-bold ${report.weeklyProgress > 0 ? (darkMode ? 'bg-green-900 text-green-300' : 'bg-green-100 text-green-800') : (darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-800')}`}>
                         +{report.weeklyProgress.toFixed(2)}%
                       </div>
                     </div>
@@ -1463,7 +2097,7 @@ const Weekly = React.memo(({ project, onUpdate }) => {
                   <td className="px-4 py-3">
                     <div className="space-y-1">
                       <div className="text-lg font-bold text-blue-600">{report.cumulativeProgress.toFixed(2)}%</div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div className={`w-full ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} rounded-full h-2`}>
                         <div
                           className="bg-gradient-to-r from-blue-500 to-blue-600 h-2 rounded-full"
                           style={{ width: `${Math.min(100, report.cumulativeProgress)}%` }}
@@ -1471,8 +2105,12 @@ const Weekly = React.memo(({ project, onUpdate }) => {
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-gray-600">
-                    {report.notes || '-'}
+                  <td className="px-4 py-3">
+                    {report.notes ? (
+                      <div className="max-w-xs truncate" title={report.notes}>
+                        {report.notes}
+                      </div>
+                    ) : '-'}
                   </td>
                   <td className="px-4 py-3">
                     <button
@@ -1492,13 +2130,13 @@ const Weekly = React.memo(({ project, onUpdate }) => {
 
       {/* Add Weekly Report Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4">
+          <div className={`rounded-xl shadow-2xl p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto ${darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'}`}>
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-gray-800">Add Weekly Report</h3>
+              <h3 className="text-xl font-bold">Add Weekly Report</h3>
               <button
                 onClick={closeModal}
-                className="text-gray-500 hover:text-gray-700"
+                className={darkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'}
               >
                 <X size={24} />
               </button>
@@ -1506,22 +2144,22 @@ const Weekly = React.memo(({ project, onUpdate }) => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Week Number *</label>
+                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Week Number *</label>
                 <input
                   type="number"
                   value={newReport.weekNumber}
                   onChange={handleWeekNumberChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:border-blue-500 ${inputClass}`}
                   min="1"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Date *</label>
+                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Date *</label>
                 <input
                   type="date"
                   value={newReport.date}
                   onChange={handleDateChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:border-blue-500 ${inputClass}`}
                 />
               </div>
             </div>
@@ -1529,7 +2167,7 @@ const Weekly = React.memo(({ project, onUpdate }) => {
             {/* Work Items Section */}
             <div className="mb-6">
               <div className="flex justify-between items-center mb-4">
-                <label className="block text-sm font-medium text-gray-700">Work Completed This Week *</label>
+                <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Work Completed This Week *</label>
                 <button
                   onClick={addWorkItem}
                   className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center gap-1"
@@ -1539,59 +2177,69 @@ const Weekly = React.memo(({ project, onUpdate }) => {
               </div>
 
               {newReport.workItems.length === 0 ? (
-                <div className="text-center py-6 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-                  <p className="text-gray-500">No work items added yet</p>
-                  <p className="text-sm text-gray-400 mt-1">Add at least one work item to calculate progress</p>
+                <div className={`text-center py-6 rounded-lg border-2 border-dashed ${darkMode ? 'bg-gray-700/50 border-gray-600 text-gray-400' : 'bg-gray-50 border-gray-300 text-gray-500'}`}>
+                  <p>No work items added yet</p>
+                  <p className="text-sm mt-1">Add at least one work item to calculate progress</p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {newReport.workItems.map((workItem, index) => {
                     const selectedBoqItem = boqItems.find(item => item.id === workItem.boqItemId);
                     const remainingQty = selectedBoqItem ? selectedBoqItem.quantity - (selectedBoqItem.completed || 0) : 0;
                     
                     return (
-                      <div key={index} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-2">
+                      <div key={index} className={`p-4 rounded-lg border ${darkMode ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-50 border-gray-200'}`}>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
                           <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">BoQ Item *</label>
+                            <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>BoQ Item *</label>
                             <select
                               value={workItem.boqItemId}
                               onChange={(e) => handleWorkItemBoqChange(index, e)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              className={`w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:border-blue-500 ${inputClass}`}
                             >
                               <option value="">Select BoQ Item</option>
                               {boqItems.map(item => (
                                 <option key={item.id} value={item.id}>
                                   {item.description} - {item.quantity} {item.unit} @ {formatCurrency(item.unitPrice)}
-                                  {item.remaining !== undefined && (
-                                    ` (Remaining: ${item.remaining} ${item.unit})`
+                                  {item.completed !== undefined && (
+                                    ` (Completed: ${item.completed || 0}/${item.quantity} ${item.unit})`
                                   )}
                                 </option>
                               ))}
                             </select>
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Quantity Completed *</label>
+                            <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Quantity Completed *</label>
                             <div className="flex gap-2">
                               <input
                                 type="number"
                                 value={workItem.qtyCompleted}
                                 onChange={(e) => handleWorkItemQtyChange(index, e)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                className={`w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:border-blue-500 ${inputClass}`}
                                 placeholder="0.00"
                                 step="0.01"
                                 min="0"
                                 max={remainingQty}
                               />
-                              <span className="text-sm text-gray-500 self-center">
+                              <span className={`text-sm self-center ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                                 {selectedBoqItem ? selectedBoqItem.unit : ''}
                               </span>
                             </div>
                             {selectedBoqItem && (
-                              <div className="text-xs text-gray-500 mt-1">
-                                Max: {remainingQty.toFixed(2)} {selectedBoqItem.unit}
+                              <div className={`text-xs mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                                Max: {remainingQty.toFixed(2)} {selectedBoqItem.unit} remaining
                               </div>
                             )}
+                          </div>
+                          <div>
+                            <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Work Description</label>
+                            <input
+                              type="text"
+                              value={workItem.description}
+                              onChange={(e) => handleWorkItemDescChange(index, e)}
+                              className={`w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:border-blue-500 ${inputClass}`}
+                              placeholder="Describe the work done"
+                            />
                           </div>
                           <div className="flex items-end">
                             <button
@@ -1603,11 +2251,11 @@ const Weekly = React.memo(({ project, onUpdate }) => {
                           </div>
                         </div>
                         {selectedBoqItem && workItem.qtyCompleted && parseFloat(workItem.qtyCompleted) > 0 && (
-                          <div className="text-xs bg-blue-50 p-2 rounded mt-2">
-                            <div className="text-blue-700 font-medium">
+                          <div className={`text-xs p-2 rounded mt-2 ${darkMode ? 'bg-blue-900/50 text-blue-200' : 'bg-blue-50 text-blue-700'}`}>
+                            <div className="font-medium">
                               Calculation: ({workItem.qtyCompleted} {selectedBoqItem.unit} × {formatCurrency(selectedBoqItem.unitPrice)}) = {formatCurrency(parseFloat(workItem.qtyCompleted) * selectedBoqItem.unitPrice)}
                             </div>
-                            <div className="text-blue-600 text-xs mt-1">
+                            <div className="text-xs mt-1">
                               This contributes {(parseFloat(workItem.qtyCompleted) * selectedBoqItem.unitPrice / totalContractValue * 100).toFixed(2)}% to total progress
                             </div>
                           </div>
@@ -1619,22 +2267,31 @@ const Weekly = React.memo(({ project, onUpdate }) => {
               )}
             </div>
 
+            {/* Photo Upload Section */}
+            <div className="mb-6">
+              <PhotoUpload 
+                photos={newReport.photos} 
+                setPhotos={setPhotos}
+                darkMode={darkMode}
+              />
+            </div>
+
             {/* Progress Calculation Preview */}
             {newReport.workItems.length > 0 && (
-              <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg border border-blue-200">
+              <div className={`mb-6 p-4 rounded-lg border ${darkMode ? 'bg-gradient-to-r from-blue-900/50 to-blue-800/50 border-blue-700 text-blue-200' : 'bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200 text-blue-700'}`}>
                 <div className="flex justify-between items-center">
                   <div>
-                    <div className="text-sm font-medium text-blue-800 mb-1">Progress Calculation Preview</div>
-                    <div className="text-xs text-blue-600">
+                    <div className="text-sm font-medium mb-1">Progress Calculation Preview</div>
+                    <div className="text-xs">
                       Formula: Σ(Completed Qty × Unit Price) / Total Contract Value × 100
                     </div>
-                    <div className="text-xs text-blue-600 mt-1">
+                    <div className="text-xs mt-1">
                       Total Contract Value: {formatCurrency(totalContractValue)}
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-2xl font-bold text-blue-700">{calculateWeeklyProgress().toFixed(2)}%</div>
-                    <div className="text-xs text-blue-600">Weekly Progress</div>
+                    <div className="text-2xl font-bold">{calculateWeeklyProgress().toFixed(2)}%</div>
+                    <div className="text-xs">Weekly Progress</div>
                   </div>
                 </div>
               </div>
@@ -1642,11 +2299,11 @@ const Weekly = React.memo(({ project, onUpdate }) => {
 
             {/* Notes */}
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Notes (Optional)</label>
+              <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Notes (Optional)</label>
               <textarea
                 value={newReport.notes}
                 onChange={handleNotesChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:border-blue-500 ${inputClass}`}
                 rows="3"
                 placeholder="Add any notes about this week's work..."
               />
@@ -1662,7 +2319,9 @@ const Weekly = React.memo(({ project, onUpdate }) => {
               </button>
               <button
                 onClick={closeModal}
-                className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                className={`px-6 py-3 border rounded-lg hover:bg-gray-50 transition-colors ${
+                  darkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                }`}
               >
                 Cancel
               </button>
@@ -1676,16 +2335,75 @@ const Weekly = React.memo(({ project, onUpdate }) => {
 
 Weekly.displayName = 'Weekly';
 
+// Project Map Component
+const ProjectMap = React.memo(({ project, darkMode }) => {
+  if (!project.location) {
+    return (
+      <div className={`text-center py-8 rounded-lg ${darkMode ? 'bg-gray-700/30' : 'bg-gray-50'}`}>
+        <MapPin className={`h-12 w-12 mx-auto mb-4 ${darkMode ? 'text-gray-500' : 'text-gray-400'}`} />
+        <p className={darkMode ? 'text-gray-400' : 'text-gray-500'}>No location set for this project</p>
+        <p className={`text-sm mt-1 ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>Edit project to add location</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <h4 className="text-lg font-semibold">Project Location</h4>
+      <div className="h-96 rounded-lg overflow-hidden border border-gray-300 dark:border-gray-600">
+        <MapContainer
+          center={project.location}
+          zoom={15}
+          style={{ height: '100%', width: '100%' }}
+          scrollWheelZoom={true}
+        >
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+          <Marker 
+            position={project.location} 
+            icon={createCustomIcon(darkMode)}
+          >
+            <Popup>
+              <div className="text-sm">
+                <p className="font-semibold">{project.name}</p>
+                <p className="text-gray-600">Contractor: {project.contractor}</p>
+                <p className="text-gray-600">Supervisor: {project.supervisor}</p>
+                <p className="text-gray-600">Lat: {project.location[0].toFixed(6)}</p>
+                <p className="text-gray-600">Lng: {project.location[1].toFixed(6)}</p>
+              </div>
+            </Popup>
+          </Marker>
+        </MapContainer>
+      </div>
+      <div className={`p-3 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
+        <div className="flex items-center gap-2 text-sm">
+          <MapPin size={14} className={darkMode ? 'text-blue-400' : 'text-blue-600'} />
+          <span className={darkMode ? 'text-gray-300' : 'text-gray-700'}>
+            GPS Coordinates: {project.location[0].toFixed(6)}, {project.location[1].toFixed(6)}
+          </span>
+        </div>
+        <div className="text-xs mt-1 opacity-70">
+          Coordinates can be used for navigation and site verification
+        </div>
+      </div>
+    </div>
+  );
+});
+
+ProjectMap.displayName = 'ProjectMap';
+
 // S-Curve Component
-const SCurve = React.memo(({ project }) => {
+const SCurve = React.memo(({ project, darkMode }) => {
   const reports = project.weeklyReports || [];
   
   if (reports.length === 0) {
     return (
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-xl font-bold text-gray-800 mb-4">S-Curve Progress Chart</h3>
-        <div className="text-center py-12 text-gray-500">
-          <BarChart3 size={48} className="mx-auto mb-4 text-gray-300" />
+      <div className={`rounded-xl shadow-lg p-6 ${darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'}`}>
+        <h3 className="text-xl font-bold mb-4">S-Curve Progress Chart</h3>
+        <div className={`text-center py-12 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+          <BarChart3 size={48} className={`mx-auto mb-4 ${darkMode ? 'text-gray-600' : 'text-gray-300'}`} />
           <p>Add weekly reports to see the S-curve</p>
         </div>
       </div>
@@ -1707,15 +2425,15 @@ const SCurve = React.memo(({ project }) => {
   const latestProgress = reports.length > 0 ? reports[reports.length - 1].cumulativeProgress : 0;
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6">
+    <div className={`rounded-xl shadow-lg p-6 ${darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'}`}>
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h3 className="text-xl font-bold text-gray-800">S-Curve Progress Chart</h3>
-          <p className="text-sm text-gray-600 mt-1">
+          <h3 className="text-xl font-bold">S-Curve Progress Chart</h3>
+          <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
             Current Progress: <span className="font-bold text-blue-600">{latestProgress.toFixed(1)}%</span>
           </p>
         </div>
-        <div className="text-sm text-gray-500">
+        <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
           {reports.length} week(s) tracked
         </div>
       </div>
@@ -1723,7 +2441,7 @@ const SCurve = React.memo(({ project }) => {
       <div className="h-96">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+            <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "#374151" : "#f0f0f0"} />
             <XAxis 
               dataKey="week" 
               tick={{ fontSize: 12 }}
@@ -1731,8 +2449,9 @@ const SCurve = React.memo(({ project }) => {
                 value: 'Week', 
                 position: 'insideBottom', 
                 offset: -5,
-                style: { fontSize: 12 }
+                style: { fontSize: 12, fill: darkMode ? '#9CA3AF' : '#374151' }
               }}
+              stroke={darkMode ? "#9CA3AF" : "#374151"}
             />
             <YAxis 
               domain={[0, 100]} 
@@ -1742,8 +2461,9 @@ const SCurve = React.memo(({ project }) => {
                 angle: -90, 
                 position: 'insideLeft',
                 offset: 10,
-                style: { fontSize: 12 }
+                style: { fontSize: 12, fill: darkMode ? '#9CA3AF' : '#374151' }
               }}
+              stroke={darkMode ? "#9CA3AF" : "#374151"}
             />
             <Tooltip 
               formatter={(value) => [`${value.toFixed(2)}%`, 'Progress']}
@@ -1754,6 +2474,8 @@ const SCurve = React.memo(({ project }) => {
               contentStyle={{ 
                 borderRadius: '8px',
                 border: 'none',
+                backgroundColor: darkMode ? '#1F2937' : 'white',
+                color: darkMode ? 'white' : '#374151',
                 boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
               }}
             />
@@ -1793,11 +2515,15 @@ const Detail = React.memo(({
   onDelete,
   formatCurrency,
   formatDate,
+  formatLength,
+  formatArea,
   calculateTotalFromBoQ,
-  getProgress 
+  getProgress,
+  darkMode 
 }) => {
   const totalValue = useMemo(() => calculateTotalFromBoQ(project.boq || []), [project.boq, calculateTotalFromBoQ]);
   const progress = useMemo(() => getProgress(project), [project, getProgress]);
+  const area = useMemo(() => (project.length || 0) * (project.averageWidth || 0), [project.length, project.averageWidth]);
   
   const completedValue = useMemo(() => 
     project.boq ? project.boq.reduce((sum, item) => {
@@ -1814,25 +2540,52 @@ const Detail = React.memo(({
     if (onDelete) onDelete(project.id);
   }, [onDelete, project.id]);
 
+  const handleDeletePhoto = useCallback(async (photoId) => {
+    if (!window.confirm('Delete this photo? This action cannot be undone.')) return;
+
+    const updatedProject = {
+      ...project,
+      photos: project.photos?.filter(photo => photo.id !== photoId) || [],
+      weeklyReports: project.weeklyReports?.map(report => ({
+        ...report,
+        photos: report.photos?.filter(photo => photo.id !== photoId) || []
+      })) || [],
+      updatedAt: new Date().toISOString()
+    };
+
+    await window.storage.set('project:' + updatedProject.id, JSON.stringify(updatedProject));
+    if (onUpdate) onUpdate();
+  }, [project, onUpdate]);
+
+  const bgClass = darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800';
+  const cardBgClass = darkMode ? 'from-gray-800 to-gray-900 border-gray-700' : 'from-white to-gray-50 border-gray-100';
+  const borderClass = darkMode ? 'border-gray-700' : 'border-gray-200';
+
   return (
     <div className="max-w-6xl mx-auto">
       {/* Project Header */}
-      <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+      <div className={`rounded-xl shadow-lg p-6 mb-6 ${bgClass}`}>
         <div className="flex justify-between items-start mb-6">
           <div>
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">{project.name}</h2>
+            <h2 className="text-2xl font-bold mb-2">{project.name}</h2>
             <div className="flex flex-wrap gap-2 mb-4">
-              <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+              <span className={`px-3 py-1 rounded-full text-xs font-medium ${darkMode ? 'bg-blue-900 text-blue-300' : 'bg-blue-100 text-blue-700'}`}>
                 {project.workType?.replace('-', ' ') || ''}
               </span>
-              <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+              <span className={`px-3 py-1 rounded-full text-xs font-medium ${darkMode ? 'bg-green-900 text-green-300' : 'bg-green-100 text-green-700'}`}>
                 {project.roadHierarchy || ''}
               </span>
-              <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">
+              <span className={`px-3 py-1 rounded-full text-xs font-medium ${darkMode ? 'bg-purple-900 text-purple-300' : 'bg-purple-100 text-purple-700'}`}>
                 {project.maintenanceType || ''}
               </span>
+              {project.location && (
+                <span className={`px-3 py-1 rounded-full text-xs font-medium ${darkMode ? 'bg-amber-900 text-amber-300' : 'bg-amber-100 text-amber-700'}`}>
+                  <MapPin size={10} className="inline mr-1" />
+                  Location Set
+                </span>
+              )}
             </div>
-            <p className="text-gray-600 text-sm">Project ID: {project.id}</p>
+            <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Project ID: {project.id}</p>
           </div>
           <div className="flex gap-2">
             <button
@@ -1851,58 +2604,86 @@ const Detail = React.memo(({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          <div className="bg-gradient-to-br from-blue-50 to-white p-6 rounded-xl border border-blue-100">
-            <h3 className="font-semibold text-gray-700 mb-3">Project Info</h3>
+          <div className={`bg-gradient-to-br p-6 rounded-xl border ${cardBgClass}`}>
+            <h3 className="font-semibold mb-3">Project Info</h3>
             <div className="space-y-2">
               <div className="flex justify-between">
-                <span className="text-gray-600">Contractor:</span>
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Contractor:</span>
                 <span className="font-medium">{project.contractor}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">Supervisor:</span>
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Supervisor:</span>
                 <span className="font-medium">{project.supervisor}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">Dates:</span>
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Dates:</span>
                 <span className="font-medium">
                   {formatDate(project.startDate)} - {formatDate(project.endDate)}
                 </span>
               </div>
+              <div className="flex justify-between">
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Length:</span>
+                <span className="font-medium">{formatLength(project.length)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Avg. Width:</span>
+                <span className="font-medium">{project.averageWidth ? `${project.averageWidth}m` : '-'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Area:</span>
+                <span className="font-medium">{formatArea(area)}</span>
+              </div>
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-green-50 to-white p-6 rounded-xl border border-green-100">
-            <h3 className="font-semibold text-gray-700 mb-3">Financial Summary</h3>
+          <div className={`bg-gradient-to-br p-6 rounded-xl border ${cardBgClass}`}>
+            <h3 className="font-semibold mb-3">Financial Summary</h3>
             <div className="space-y-2">
               <div className="flex justify-between">
-                <span className="text-gray-600">Total Value:</span>
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Total Value:</span>
                 <span className="font-bold text-blue-600">{formatCurrency(totalValue)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">Completed Value:</span>
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Completed Value:</span>
                 <span className="font-bold text-green-600">{formatCurrency(completedValue)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">Remaining Value:</span>
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Remaining Value:</span>
                 <span className="font-bold text-amber-600">{formatCurrency(totalValue - completedValue)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Progress Value:</span>
+                <span className="font-bold text-purple-600">{formatCurrency(totalValue * progress / 100)}</span>
               </div>
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-purple-50 to-white p-6 rounded-xl border border-purple-100">
-            <h3 className="font-semibold text-gray-700 mb-3">Progress Summary</h3>
+          <div className={`bg-gradient-to-br p-6 rounded-xl border ${cardBgClass}`}>
+            <h3 className="font-semibold mb-3">Progress Summary</h3>
             <div className="space-y-2">
               <div className="flex justify-between">
-                <span className="text-gray-600">Current Progress:</span>
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Current Progress:</span>
                 <span className="font-bold text-purple-600">{progress.toFixed(1)}%</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">BoQ Items:</span>
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>BoQ Items:</span>
                 <span className="font-medium">{project.boq?.length || 0} items</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">Weekly Reports:</span>
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Weekly Reports:</span>
                 <span className="font-medium">{project.weeklyReports?.length || 0} weeks</span>
+              </div>
+              <div className="flex justify-between">
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Photos:</span>
+                <span className="font-medium">{project.photos?.length || 0} photos</span>
+              </div>
+              <div className="flex justify-between">
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Road Length:</span>
+                <span className="font-medium">{formatLength(project.length)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Work Area:</span>
+                <span className="font-medium">{formatArea(area)}</span>
               </div>
             </div>
           </div>
@@ -1910,31 +2691,57 @@ const Detail = React.memo(({
 
         {/* Progress Bar */}
         <div className="mt-4">
-          <div className="flex justify-between text-sm text-gray-600 mb-2">
+          <div className={`flex justify-between text-sm mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
             <span>Project Progress</span>
             <span>{progress.toFixed(2)}%</span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-4">
+          <div className={`w-full ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} rounded-full h-4`}>
             <div
               className="bg-gradient-to-r from-blue-500 via-blue-600 to-blue-700 h-4 rounded-full transition-all duration-500"
               style={{ width: `${progress}%` }}
             ></div>
           </div>
-          <div className="flex justify-between text-xs text-gray-500 mt-1">
+          <div className={`flex justify-between text-xs mt-1 ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
             <span>{formatCurrency(completedValue)} completed</span>
             <span>{formatCurrency(totalValue - completedValue)} remaining</span>
           </div>
         </div>
       </div>
 
+      {/* Project Map Section */}
+      <div className={`rounded-xl shadow-lg p-6 mb-6 ${bgClass}`}>
+        <ProjectMap project={project} darkMode={darkMode} />
+      </div>
+
+      {/* Photo Gallery Section */}
+      <div className={`rounded-xl shadow-lg p-6 mb-6 ${bgClass}`}>
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h3 className="text-xl font-bold">Project Photos</h3>
+            <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+              {project.photos?.length || 0} photo(s) from weekly reports
+            </p>
+          </div>
+          <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+            Click to preview, hover to delete
+          </div>
+        </div>
+        <PhotoGallery 
+          photos={project.photos || []} 
+          projectId={project.id} 
+          darkMode={darkMode}
+          onDeletePhoto={handleDeletePhoto}
+        />
+      </div>
+
       {/* BoQ Section */}
-      <BoQ project={project} onUpdate={onUpdate} />
+      <BoQ project={project} onUpdate={onUpdate} darkMode={darkMode} />
 
       {/* Weekly Reports Section */}
-      <Weekly project={project} onUpdate={onUpdate} />
+      <Weekly project={project} onUpdate={onUpdate} darkMode={darkMode} />
 
       {/* S-Curve Section */}
-      <SCurve project={project} />
+      <SCurve project={project} darkMode={darkMode} />
     </div>
   );
 });
