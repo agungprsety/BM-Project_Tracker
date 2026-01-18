@@ -27,7 +27,7 @@ const PhotoGallery = React.memo(({ photos, onDeletePhoto, darkMode }) => {
             <div className="aspect-square rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
               <img 
                 src={photo.dataUrl} 
-                alt={`Project photo ${index + 1}`}
+                alt={`Project ${index + 1}`}
                 className="w-full h-full object-cover hover:scale-105 transition-transform duration-200"
               />
             </div>

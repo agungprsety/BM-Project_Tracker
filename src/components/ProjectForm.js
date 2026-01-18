@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Save, Calendar, CheckCircle, MapPin } from 'lucide-react';
+import { Save, Calendar, CheckCircle } from 'lucide-react';
 import MapPicker from './MapPicker';
 
 const ProjectForm = React.memo(({ existing, onSave, onCancel, darkMode }) => {

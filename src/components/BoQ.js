@@ -25,6 +25,18 @@ const BoQ = React.memo(({ project, onUpdate, darkMode }) => {
     [items]
   );
 
+  const saveBoQ = useCallback(async (boqItems) => {
+    const updatedProject = {
+      ...project,
+      boq: boqItems,
+      contractPrice: boqItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0).toString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    await window.storage.set('project:' + updatedProject.id, JSON.stringify(updatedProject));
+    if (onUpdate) onUpdate();
+  }, [project, onUpdate]);
+
   const addItem = useCallback(() => {
     if (!newItem.description || !newItem.quantity || !newItem.unit || !newItem.unitPrice) {
       alert('Please fill all fields');
@@ -45,13 +57,13 @@ const BoQ = React.memo(({ project, onUpdate, darkMode }) => {
     setItems(updatedItems);
     setNewItem({ description: '', quantity: '', unit: '', unitPrice: '' });
     saveBoQ(updatedItems);
-  }, [items, newItem]);
+  }, [items, newItem, saveBoQ]);
 
   const deleteItem = useCallback((id) => {
     const updatedItems = items.filter(item => item.id !== id);
     setItems(updatedItems);
     saveBoQ(updatedItems);
-  }, [items]);
+  }, [items, saveBoQ]);
 
   const updateUnitPrice = useCallback((id, unitPrice) => {
     const updatedItems = items.map(item => {
@@ -66,7 +78,7 @@ const BoQ = React.memo(({ project, onUpdate, darkMode }) => {
     });
     setItems(updatedItems);
     saveBoQ(updatedItems);
-  }, [items]);
+  }, [items, saveBoQ]);
 
   const updateQuantity = useCallback((id, quantity) => {
     const updatedItems = items.map(item => {
@@ -81,19 +93,7 @@ const BoQ = React.memo(({ project, onUpdate, darkMode }) => {
     });
     setItems(updatedItems);
     saveBoQ(updatedItems);
-  }, [items]);
-
-  const saveBoQ = useCallback(async (boqItems) => {
-    const updatedProject = {
-      ...project,
-      boq: boqItems,
-      contractPrice: boqItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0).toString(),
-      updatedAt: new Date().toISOString()
-    };
-    
-    await window.storage.set('project:' + updatedProject.id, JSON.stringify(updatedProject));
-    if (onUpdate) onUpdate();
-  }, [project, onUpdate]);
+  }, [items, saveBoQ]);
 
   const handleDescriptionChange = useCallback((e) => 
     setNewItem(prev => ({ ...prev, description: e.target.value })), []);

@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useCallback, useRef } from 'react';
-import { Plus, Trash2, X, Camera, Calendar } from 'lucide-react';
+import React, { useState, useMemo, useCallback } from 'react';
+import { Plus, Trash2, X, Calendar } from 'lucide-react';
 import PhotoUpload from './PhotoUpload';
 import { formatDate, formatCurrency } from '../utils';
 
@@ -14,7 +14,7 @@ const Weekly = React.memo(({ project, onUpdate, darkMode }) => {
     photos: []
   });
 
-  const boqItems = project.boq || [];
+  const boqItems = useMemo(() => project.boq || [], [project.boq]);
   const totalContractValue = useMemo(() => 
     boqItems.reduce((total, item) => total + (item.quantity * item.unitPrice), 0),
     [boqItems]
@@ -34,7 +34,7 @@ const Weekly = React.memo(({ project, onUpdate, darkMode }) => {
       photos: []
     });
     setShowModal(true);
-  }, [boqItems.length, reports]);
+  }, [boqItems, reports]);
 
   const addWorkItem = useCallback(() => {
     setNewReport(prev => ({
