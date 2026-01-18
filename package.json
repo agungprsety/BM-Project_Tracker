@@ -4,13 +4,18 @@
   "description": "BM Progress Tracker - A web application for tracking construction project progress",
   "private": true,
   "dependencies": {
+    "@reduxjs/toolkit": "^2.11.2",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.0.0",
+    "jspdf-autotable": "^5.0.7",
+    "leaflet": "^1.9.4",
+    "lucide-react": "^0.294.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-scripts": "5.0.1",
-    "lucide-react": "^0.294.0",
-    "recharts": "^2.8.2",
-    "leaflet": "^1.9.4",
-    "react-leaflet": "^4.2.1"
+    "react-leaflet": "^4.2.1",
+    "react-redux": "^9.2.0",
+    "react-scripts": "^5.0.1",
+    "recharts": "^2.8.2"
   },
   "scripts": {
     "start": "react-scripts start",

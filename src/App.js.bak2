@@ -1,0 +1,2751 @@
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Plus, Edit2, Trash2, Save, X, Download, Upload, Calendar, BarChart3, CheckCircle, TrendingUp, Moon, Sun, Camera, MapPin, Image as ImageIcon, XCircle } from 'lucide-react';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import 'leaflet/dist/leaflet.css';
+import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet';
+import L from 'leaflet';
+
+// Initialize storage ONCE at the top level
+if (!window.storage) {
+  window.storage = {
+    async set(key, value) {
+      localStorage.setItem(key, value);
+      return { success: true };
+    },
+    
+    async get(key) {
+      const value = localStorage.getItem(key);
+      return value ? { value } : null;
+    },
+    
+    async delete(key) {
+      localStorage.removeItem(key);
+      return { success: true };
+    },
+    
+    async list(prefix) {
+      const keys = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key.startsWith(prefix)) {
+          keys.push(key);
+        }
+      }
+      return { keys };
+    }
+  };
+}
+
+// Helper functions
+const formatCurrency = (n) => {
+  if (!n) return 'Rp 0';
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(n);
+};
+
+const formatDate = (dateString) => {
+  if (!dateString) return '-';
+  try {
+    return new Date(dateString).toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    });
+  } catch {
+    return dateString;
+  }
+};
+
+const formatLength = (meters) => {
+  if (!meters) return '0 m';
+  if (meters >= 1000) {
+    return `${(meters / 1000).toFixed(2)} km`;
+  }
+  return `${meters.toFixed(2)} m`;
+};
+
+const formatArea = (sqMeters) => {
+  if (!sqMeters) return '0 m²';
+  if (sqMeters >= 10000) {
+    return `${(sqMeters / 10000).toFixed(2)} ha`;
+  }
+  return `${sqMeters.toFixed(2)} m²`;
+};
+
+// Helper to convert base64 to blob
+const dataURLtoBlob = (dataURL) => {
+  const arr = dataURL.split(',');
+  const mime = arr[0].match(/:(.*?);/)[1];
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) {
+    u8arr[n] = bstr.charCodeAt(n);
+  }
+  return new Blob([u8arr], { type: mime });
+};
+
+// Custom leaflet icons
+const createCustomIcon = (darkMode) => {
+  return L.divIcon({
+    html: `<div class="w-10 h-10 rounded-full flex items-center justify-center ${darkMode ? 'bg-blue-700' : 'bg-blue-600'} text-white shadow-lg border-2 ${darkMode ? 'border-gray-800' : 'border-white'}">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" />
+            </svg>
+          </div>`,
+    className: 'custom-marker',
+    iconSize: [40, 40],
+    iconAnchor: [20, 40],
+    popupAnchor: [0, -40]
+  });
+};
+
+// Loading skeleton
+const LoadingSkeleton = React.memo(({ darkMode }) => (
+  <div className="animate-pulse">
+    <div className={`h-8 ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} rounded mb-4`}></div>
+    <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className={`h-24 ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} rounded`}></div>
+      <div className={`h-24 ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} rounded`}></div>
+      <div className={`h-24 ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} rounded`}></div>
+    </div>
+    <div className={`h-64 ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} rounded`}></div>
+  </div>
+));
+
+LoadingSkeleton.displayName = 'LoadingSkeleton';
+
+// Photo Gallery Component
+const PhotoGallery = React.memo(({ photos, projectId, darkMode, onDeletePhoto }) => {
+  const [selectedImage, setSelectedImage] = useState(null);
+
+  if (!photos || photos.length === 0) {
+    return (
+      <div className={`text-center py-8 rounded-lg ${darkMode ? 'bg-gray-700/30' : 'bg-gray-50'}`}>
+        <ImageIcon className={`h-12 w-12 mx-auto mb-4 ${darkMode ? 'text-gray-500' : 'text-gray-400'}`} />
+        <p className={darkMode ? 'text-gray-400' : 'text-gray-500'}>No photos yet</p>
+        <p className={`text-sm mt-1 ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>Add photos in weekly reports</p>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        {photos.map((photo, index) => (
+          <div 
+            key={photo.id || index} 
+            className="relative group cursor-pointer"
+            onClick={() => setSelectedImage(photo)}
+          >
+            <div className="aspect-square rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+              <img 
+                src={photo.dataUrl} 
+                alt={`Project photo ${index + 1}`}
+                className="w-full h-full object-cover hover:scale-105 transition-transform duration-200"
+              />
+            </div>
+            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-opacity duration-200 rounded-lg"></div>
+            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeletePhoto(photo.id);
+                }}
+                className="bg-red-600 text-white p-1 rounded-full hover:bg-red-700"
+              >
+                <XCircle size={16} />
+              </button>
+            </div>
+            <div className="mt-2">
+              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                {photo.date ? formatDate(photo.date) : 'No date'}
+              </p>
+              <p className="text-xs text-gray-600 dark:text-gray-300 truncate">
+                {photo.description || 'No description'}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Week {photo.weekNumber || 'N/A'}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Image Preview Modal */}
+      {selectedImage && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4"
+          onClick={() => setSelectedImage(null)}
+        >
+          <div className="relative max-w-4xl max-h-[90vh]">
+            <button
+              className="absolute -top-10 right-0 text-white hover:text-gray-300"
+              onClick={() => setSelectedImage(null)}
+            >
+              <X size={24} />
+            </button>
+            <img 
+              src={selectedImage.dataUrl} 
+              alt="Preview"
+              className="max-w-full max-h-[80vh] rounded-lg"
+            />
+            <div className="mt-4 text-white">
+              <p className="font-semibold">{selectedImage.description || 'No description'}</p>
+              <p className="text-sm opacity-80">
+                {selectedImage.date ? formatDate(selectedImage.date) : 'No date'} | 
+                Week {selectedImage.weekNumber || 'N/A'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+});
+
+PhotoGallery.displayName = 'PhotoGallery';
+
+// Map Picker Component
+const MapPicker = React.memo(({ position, setPosition, darkMode }) => {
+  const LocationMarker = () => {
+    const map = useMapEvents({
+      click(e) {
+        setPosition([e.latlng.lat, e.latlng.lng]);
+        map.flyTo(e.latlng, map.getZoom());
+      },
+    });
+
+    return position === null ? null : (
+      <Marker 
+        position={position} 
+        icon={createCustomIcon(darkMode)}
+        draggable={true}
+        eventHandlers={{
+          dragend: (e) => {
+            const marker = e.target;
+            const position = marker.getLatLng();
+            setPosition([position.lat, position.lng]);
+          }
+        }}
+      >
+        <Popup>
+          <div className="text-sm">
+            <p className="font-semibold">Project Location</p>
+            <p>Lat: {position[0].toFixed(6)}</p>
+            <p>Lng: {position[1].toFixed(6)}</p>
+          </div>
+        </Popup>
+      </Marker>
+    );
+  };
+
+  const handleUseCurrentLocation = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          setPosition([latitude, longitude]);
+        },
+        (error) => {
+          console.error("Error getting location:", error);
+          alert("Unable to get current location. Please enable location services or select manually.");
+        }
+      );
+    } else {
+      alert("Geolocation is not supported by your browser.");
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+          Project Location
+        </label>
+        <button
+          type="button"
+          onClick={handleUseCurrentLocation}
+          className="flex items-center gap-2 px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+        >
+          <MapPin size={14} />
+          Use Current Location
+        </button>
+      </div>
+      
+      <div className="h-64 rounded-lg overflow-hidden border border-gray-300 dark:border-gray-600">
+        <MapContainer
+          center={position || [-6.2088, 106.8456]} // Default to Jakarta
+          zoom={13}
+          style={{ height: '100%', width: '100%' }}
+          scrollWheelZoom={true}
+        >
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+          {position && <LocationMarker />}
+        </MapContainer>
+      </div>
+      
+      {position && (
+        <div className={`p-3 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
+          <div className="flex items-center gap-2 text-sm">
+            <MapPin size={14} className={darkMode ? 'text-blue-400' : 'text-blue-600'} />
+            <span className={darkMode ? 'text-gray-300' : 'text-gray-700'}>
+              Selected Location: {position[0].toFixed(6)}, {position[1].toFixed(6)}
+            </span>
+          </div>
+          <div className="text-xs mt-1 opacity-70">
+            Click on the map to select location or drag the marker to adjust
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
+
+MapPicker.displayName = 'MapPicker';
+
+// ProjectForm Component
+const ProjectForm = React.memo(({ existing, onSave, onCancel, darkMode }) => {
+  const [formData, setFormData] = useState(() => ({
+    name: '',
+    contractor: '',
+    supervisor: '',
+    contractPrice: '0',
+    workType: 'flexible-pavement',
+    roadHierarchy: 'JAS',
+    maintenanceType: 'reconstruction',
+    startDate: '',
+    endDate: '',
+    length: '',
+    averageWidth: '',
+    location: existing?.location || null,
+    boq: [],
+    weeklyReports: [],
+    photos: existing?.photos || [],
+    ...existing
+  }));
+  
+  const [errors, setErrors] = useState({});
+  const [isSaving, setIsSaving] = useState(false);
+
+  const validate = useCallback(() => {
+    const newErrors = {};
+    if (!formData.name.trim()) newErrors.name = 'Project name is required';
+    if (!formData.contractor.trim()) newErrors.contractor = 'Contractor is required';
+    if (!formData.supervisor.trim()) newErrors.supervisor = 'Supervisor is required';
+    if (!formData.startDate) newErrors.startDate = 'Start date is required';
+    if (!formData.endDate) newErrors.endDate = 'End date is required';
+    if (formData.startDate && formData.endDate && formData.startDate > formData.endDate) {
+      newErrors.endDate = 'End date must be after start date';
+    }
+    if (!formData.length || isNaN(formData.length) || parseFloat(formData.length) <= 0) {
+      newErrors.length = 'Length must be a positive number';
+    }
+    if (!formData.averageWidth || isNaN(formData.averageWidth) || parseFloat(formData.averageWidth) <= 0) {
+      newErrors.averageWidth = 'Average width must be a positive number';
+    }
+    return newErrors;
+  }, [formData]);
+
+  const handleSubmit = useCallback(async () => {
+    const validationErrors = validate();
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const projectToSave = {
+        ...formData,
+        contractPrice: formData.contractPrice || '0',
+        length: parseFloat(formData.length),
+        averageWidth: parseFloat(formData.averageWidth),
+        updatedAt: new Date().toISOString(),
+        id: existing?.id || `project_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      };
+
+      if (!existing) {
+        projectToSave.createdAt = new Date().toISOString();
+      }
+
+      await window.storage.set('project:' + projectToSave.id, JSON.stringify(projectToSave));
+      
+      if (onSave) onSave();
+    } catch (e) {
+      console.error('Save failed:', e);
+      alert(`Save failed: ${e.message || 'Unknown error'}`);
+    } finally {
+      setIsSaving(false);
+    }
+  }, [formData, existing, validate, onSave]);
+
+  const handleChange = useCallback((field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+    
+    if (errors[field]) {
+      setErrors(prev => ({
+        ...prev,
+        [field]: undefined
+      }));
+    }
+  }, [errors]);
+
+  const setLocation = useCallback((location) => {
+    handleChange('location', location);
+  }, [handleChange]);
+
+  const handleNameChange = useCallback((e) => handleChange('name', e.target.value), [handleChange]);
+  const handleContractorChange = useCallback((e) => handleChange('contractor', e.target.value), [handleChange]);
+  const handleSupervisorChange = useCallback((e) => handleChange('supervisor', e.target.value), [handleChange]);
+  const handleWorkTypeChange = useCallback((e) => handleChange('workType', e.target.value), [handleChange]);
+  const handleRoadHierarchyChange = useCallback((e) => handleChange('roadHierarchy', e.target.value), [handleChange]);
+  const handleMaintenanceTypeChange = useCallback((e) => handleChange('maintenanceType', e.target.value), [handleChange]);
+  const handleStartDateChange = useCallback((e) => handleChange('startDate', e.target.value), [handleChange]);
+  const handleEndDateChange = useCallback((e) => handleChange('endDate', e.target.value), [handleChange]);
+  const handleLengthChange = useCallback((e) => handleChange('length', e.target.value), [handleChange]);
+  const handleAverageWidthChange = useCallback((e) => handleChange('averageWidth', e.target.value), [handleChange]);
+
+  const bgClass = darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800';
+  const inputClass = darkMode 
+    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500' 
+    : 'border-gray-300 text-gray-700 placeholder-gray-500 focus:ring-blue-500 focus:border-blue-500';
+  const errorBorderClass = darkMode ? 'border-red-500' : 'border-red-500';
+  const infoBoxClass = darkMode ? 'bg-blue-900/50 border-blue-700 text-blue-200' : 'bg-blue-50 border-blue-200 text-blue-700';
+
+  return (
+    <div className={`max-w-4xl mx-auto rounded-xl shadow-lg p-6 ${bgClass}`}>
+      <h2 className={`text-2xl font-bold mb-6 border-b pb-2 ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+        {existing ? 'Edit Project' : 'Create New Project'}
+      </h2>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Project Name *</label>
+          <input
+            type="text"
+            value={formData.name}
+            onChange={handleNameChange}
+            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:border-blue-500 ${errors.name ? errorBorderClass : 'border-gray-300'} ${inputClass}`}
+            placeholder="Enter project name"
+          />
+          {errors.name && <p className="mt-1 text-sm text-red-500">{errors.name}</p>}
+        </div>
+
+        <div>
+          <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Contractor *</label>
+          <input
+            type="text"
+            value={formData.contractor}
+            onChange={handleContractorChange}
+            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:border-blue-500 ${errors.contractor ? errorBorderClass : 'border-gray-300'} ${inputClass}`}
+            placeholder="Enter contractor name"
+          />
+          {errors.contractor && <p className="mt-1 text-sm text-red-500">{errors.contractor}</p>}
+        </div>
+
+        <div>
+          <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Supervisor *</label>
+          <input
+            type="text"
+            value={formData.supervisor}
+            onChange={handleSupervisorChange}
+            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:border-blue-500 ${errors.supervisor ? errorBorderClass : 'border-gray-300'} ${inputClass}`}
+            placeholder="Enter supervisor name"
+          />
+          {errors.supervisor && <p className="mt-1 text-sm text-red-500">{errors.supervisor}</p>}
+        </div>
+
+        <div>
+          <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Length (meters) *</label>
+          <input
+            type="number"
+            value={formData.length}
+            onChange={handleLengthChange}
+            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:border-blue-500 ${errors.length ? errorBorderClass : 'border-gray-300'} ${inputClass}`}
+            placeholder="Enter road length"
+            min="0"
+            step="0.01"
+          />
+          {errors.length && <p className="mt-1 text-sm text-red-500">{errors.length}</p>}
+        </div>
+
+        <div>
+          <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Average Width (meters) *</label>
+          <input
+            type="number"
+            value={formData.averageWidth}
+            onChange={handleAverageWidthChange}
+            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:border-blue-500 ${errors.averageWidth ? errorBorderClass : 'border-gray-300'} ${inputClass}`}
+            placeholder="Enter average width"
+            min="0"
+            step="0.01"
+          />
+          {errors.averageWidth && <p className="mt-1 text-sm text-red-500">{errors.averageWidth}</p>}
+        </div>
+
+        <div>
+          <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Work Type</label>
+          <select
+            value={formData.workType}
+            onChange={handleWorkTypeChange}
+            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:border-blue-500 ${inputClass}`}
+          >
+            <option value="rigid-pavement">Rigid Pavement</option>
+            <option value="flexible-pavement">Flexible Pavement</option>
+            <option value="combination">Combination</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+
+        <div>
+          <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Road Hierarchy</label>
+          <select
+            value={formData.roadHierarchy}
+            onChange={handleRoadHierarchyChange}
+            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:border-blue-500 ${inputClass}`}
+          >
+            <option value="JAS">JAS</option>
+            <option value="JKS">JKS</option>
+            <option value="JLS">JLS</option>
+            <option value="Jling-S">Jling-S</option>
+            <option value="J-ling Kota">J-ling Kota</option>
+          </select>
+        </div>
+
+        <div>
+          <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Maintenance Type</label>
+          <select
+            value={formData.maintenanceType}
+            onChange={handleMaintenanceTypeChange}
+            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:border-blue-500 ${inputClass}`}
+          >
+            <option value="reconstruction">Reconstruction</option>
+            <option value="rehabilitation">Rehabilitation</option>
+            <option value="periodic-rehabilitation">Periodic Rehabilitation</option>
+            <option value="routine-maintenance">Routine Maintenance</option>
+          </select>
+        </div>
+
+        <div>
+          <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Start Date *</label>
+          <div className="relative">
+            <Calendar className={`absolute left-3 top-2.5 ${darkMode ? 'text-gray-400' : 'text-gray-400'}`} size={20} />
+            <input
+              type="date"
+              value={formData.startDate}
+              onChange={handleStartDateChange}
+              className={`w-full pl-10 px-4 py-2 border rounded-lg focus:ring-2 focus:border-blue-500 ${errors.startDate ? errorBorderClass : 'border-gray-300'} ${inputClass}`}
+            />
+          </div>
+          {errors.startDate && <p className="mt-1 text-sm text-red-500">{errors.startDate}</p>}
+        </div>
+
+        <div>
+          <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>End Date *</label>
+          <div className="relative">
+            <Calendar className={`absolute left-3 top-2.5 ${darkMode ? 'text-gray-400' : 'text-gray-400'}`} size={20} />
+            <input
+              type="date"
+              value={formData.endDate}
+              onChange={handleEndDateChange}
+              className={`w-full pl-10 px-4 py-2 border rounded-lg focus:ring-2 focus:border-blue-500 ${errors.endDate ? errorBorderClass : 'border-gray-300'} ${inputClass}`}
+              min={formData.startDate}
+            />
+          </div>
+          {errors.endDate && <p className="mt-1 text-sm text-red-500">{errors.endDate}</p>}
+        </div>
+      </div>
+
+      {/* Location Picker - Full Width */}
+      <div className="mt-6">
+        <MapPicker 
+          position={formData.location} 
+          setPosition={setLocation}
+          darkMode={darkMode}
+        />
+      </div>
+
+      <div className={`mt-6 p-4 rounded-lg border ${infoBoxClass}`}>
+        <div className="flex items-center gap-2 mb-2">
+          <CheckCircle size={18} />
+          <span className="font-medium">Note:</span>
+        </div>
+        <p className="text-sm">
+          • Contract value will be automatically calculated from BoQ items.<br/>
+          • You can add BoQ items after creating the project.<br/>
+          • Set project location using the map above or use current location.<br/>
+          • Photos can be added in weekly reports.
+        </p>
+      </div>
+
+      <div className="flex gap-3 mt-8 pt-6 border-t border-gray-700">
+        <button
+          onClick={handleSubmit}
+          disabled={isSaving}
+          className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isSaving ? (
+            <>
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              Saving...
+            </>
+          ) : (
+            <>
+              <Save size={18} /> {existing ? 'Update Project' : 'Create Project'}
+            </>
+          )}
+        </button>
+        <button
+          onClick={onCancel}
+          disabled={isSaving}
+          className={`px-6 py-3 border rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 ${
+            darkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+          }`}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+});
+
+ProjectForm.displayName = 'ProjectForm';
+
+// Nav Component
+const Nav = React.memo(({ view, setView, projectsLength, exportData, importData, darkMode, toggleDarkMode }) => {
+  const handleSetViewSummary = useCallback(() => setView('summary'), [setView]);
+  const handleSetViewAdd = useCallback(() => setView('add'), [setView]);
+
+  return (
+    <nav className={`p-4 mb-6 shadow-lg ${darkMode ? 'bg-gradient-to-r from-gray-800 to-gray-900 text-white' : 'bg-gradient-to-r from-blue-700 to-blue-800 text-white'}`}>
+      <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div className="flex items-center gap-3">
+          <BarChart3 size={28} />
+          <h1 className="text-2xl font-bold tracking-tight">BM Progress Tracker</h1>
+        </div>
+        <div className="flex flex-wrap gap-2 justify-center">
+          <button 
+            onClick={toggleDarkMode}
+            className={`px-3 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+              darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-blue-600 hover:bg-blue-700'
+            }`}
+            title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+          >
+            {darkMode ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+
+          <button 
+            onClick={handleSetViewSummary} 
+            className={`px-4 py-2 rounded-lg transition-colors ${view === 'summary' ? (darkMode ? 'bg-gray-700' : 'bg-blue-900') : (darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-blue-600 hover:bg-blue-700')}`}
+          >
+            Dashboard
+          </button>
+
+          <button 
+            onClick={handleSetViewAdd} 
+            className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all flex items-center gap-2"
+          >
+            <Plus size={18} /> New Project
+          </button>
+
+          <div className="flex gap-2">
+            <label className={`cursor-pointer px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+              darkMode ? 'bg-purple-700 hover:bg-purple-600' : 'bg-purple-600 hover:bg-purple-700'
+            }`}>
+              <Upload size={18} /> Import
+              <input 
+                type="file" 
+                accept=".json" 
+                onChange={importData} 
+                className="hidden" 
+              />
+            </label>
+
+            <button 
+              onClick={exportData} 
+              disabled={projectsLength === 0}
+              className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 ${
+                darkMode ? 'bg-amber-700 hover:bg-amber-600' : 'bg-amber-600 hover:bg-amber-700'
+              }`}
+            >
+              <Download size={18} /> Export
+            </button>
+          </div>
+        </div>
+      </div>
+    </nav>
+  );
+});
+
+Nav.displayName = 'Nav';
+
+// Main App Component
+function App() {
+  const [projects, setProjects] = useState([]);
+  const [view, setView] = useState('summary');
+  const [selected, setSelected] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('darkMode');
+    return saved ? JSON.parse(saved) : false;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('darkMode', JSON.stringify(darkMode));
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [darkMode]);
+
+  const toggleDarkMode = useCallback(() => {
+    setDarkMode(prev => !prev);
+  }, []);
+
+  const loadProjects = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await window.storage.list('project:');
+      if (result && result.keys) {
+        const data = await Promise.all(result.keys.map(async (key) => {
+          try {
+            const d = await window.storage.get(key);
+            return d ? JSON.parse(d.value) : null;
+          } catch (e) {
+            console.warn('Failed to parse project:', key, e);
+            return null;
+          }
+        }));
+        const validProjects = data.filter(p => p && p.id && p.name);
+        setProjects(validProjects);
+      } else {
+        setProjects([]);
+      }
+    } catch (e) {
+      console.error('Failed to load projects:', e);
+      setError(e.message || 'Failed to load projects');
+      setProjects([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadProjects();
+  }, [loadProjects]);
+
+  const calculateTotalFromBoQ = useCallback((boq) => {
+    if (!boq || !Array.isArray(boq)) return 0;
+    return boq.reduce((total, item) => {
+      const quantity = Number(item.quantity) || 0;
+      const unitPrice = Number(item.unitPrice) || 0;
+      return total + (quantity * unitPrice);
+    }, 0);
+  }, []);
+
+  const saveProject = useCallback(async (project) => {
+    try {
+      if (!project.name || !project.contractor || !project.supervisor || !project.length || !project.averageWidth) {
+        throw new Error('Required fields missing');
+      }
+
+      let contractPrice = '0';
+      if (project.boq && project.boq.length > 0) {
+        contractPrice = calculateTotalFromBoQ(project.boq).toString();
+      }
+
+      const projectToSave = {
+        ...project,
+        contractPrice,
+        length: parseFloat(project.length) || 0,
+        averageWidth: parseFloat(project.averageWidth) || 0,
+        id: project.id || `project_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        updatedAt: new Date().toISOString()
+      };
+
+      if (!project.id) {
+        projectToSave.createdAt = new Date().toISOString();
+      }
+
+      await window.storage.set('project:' + projectToSave.id, JSON.stringify(projectToSave));
+      await loadProjects();
+      return projectToSave;
+    } catch (e) {
+      console.error('Save failed:', e);
+      throw e;
+    }
+  }, [loadProjects, calculateTotalFromBoQ]);
+
+  const deleteProject = useCallback(async (id) => {
+    if (window.confirm('Are you sure you want to delete this project? This action cannot be undone.')) {
+      try {
+        await window.storage.delete('project:' + id);
+        await loadProjects();
+        if (view === 'detail' && selected?.id === id) {
+          setView('summary');
+          setSelected(null);
+        }
+      } catch (e) {
+        console.error('Delete failed:', e);
+        alert('Failed to delete project');
+      }
+    }
+  }, [loadProjects, view, selected]);
+
+  const exportData = useCallback(async () => {
+    try {
+      const data = {
+        version: '1.3',
+        exportDate: new Date().toISOString(),
+        projects: projects,
+        darkMode: darkMode
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `bm-projects-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('Export failed:', e);
+      alert('Export failed');
+    }
+  }, [projects, darkMode]);
+
+  const importData = useCallback(async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (!window.confirm('This will overwrite existing data. Are you sure?')) {
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      
+      if (!data.version || !data.version.startsWith('1.')) {
+        throw new Error('Invalid file version. Expected version 1.x');
+      }
+
+      if (!Array.isArray(data.projects)) {
+        throw new Error('Invalid data format');
+      }
+
+      for (const project of data.projects) {
+        if (project.id && project.name) {
+          await window.storage.set('project:' + project.id, JSON.stringify(project));
+        }
+      }
+
+      if (data.darkMode !== undefined) {
+        setDarkMode(data.darkMode);
+      }
+      
+      await loadProjects();
+      alert('Import completed successfully!');
+    } catch (e) {
+      console.error('Import failed:', e);
+      alert(`Import failed: ${e.message}`);
+    }
+    
+    event.target.value = '';
+  }, [loadProjects]);
+
+  const getProgress = useCallback((p) => {
+    if (!p.boq || p.boq.length === 0) return 0;
+    
+    const totalValue = calculateTotalFromBoQ(p.boq);
+    if (totalValue === 0) return 0;
+    
+    const completedValue = p.boq.reduce((total, item) => {
+      const completedQty = item.completed || 0;
+      return total + (completedQty * (item.unitPrice || 0));
+    }, 0);
+    
+    return Math.min(100, (completedValue / totalValue) * 100);
+  }, [calculateTotalFromBoQ]);
+
+  const handleSaveSuccess = useCallback(() => {
+    setView('summary');
+    loadProjects();
+  }, [loadProjects]);
+
+  const handleFormCancel = useCallback(() => {
+    setView('summary');
+    setSelected(null);
+  }, []);
+
+  const handleViewDetail = useCallback((project) => {
+    setSelected(project);
+    setView('detail');
+  }, []);
+
+  const handleEditProject = useCallback((project) => {
+    setSelected(project);
+    setView('edit');
+  }, []);
+
+  const handleReload = useCallback(() => {
+    loadProjects();
+  }, [loadProjects]);
+
+  const handleEditInDetail = useCallback(() => {
+    setView('edit');
+  }, []);
+
+  const handleDeleteProject = useCallback((id) => {
+    deleteProject(id);
+  }, [deleteProject]);
+
+  const currentView = useMemo(() => {
+    switch (view) {
+      case 'summary':
+        return (
+          <Summary 
+            projects={projects}
+            loading={loading}
+            error={error}
+            getProgress={getProgress}
+            formatCurrency={formatCurrency}
+            formatDate={formatDate}
+            formatLength={formatLength}
+            formatArea={formatArea}
+            onViewDetail={handleViewDetail}
+            onEditProject={handleEditProject}
+            onReload={handleReload}
+            darkMode={darkMode}
+          />
+        );
+      case 'add':
+        return (
+          <ProjectForm 
+            onSave={handleSaveSuccess}
+            onCancel={handleFormCancel}
+            darkMode={darkMode}
+          />
+        );
+      case 'edit':
+        return selected ? (
+          <ProjectForm 
+            existing={selected}
+            onSave={handleSaveSuccess}
+            onCancel={() => setView('detail')}
+            darkMode={darkMode}
+          />
+        ) : null;
+      case 'detail':
+        return selected ? (
+          <Detail 
+            project={selected}
+            onUpdate={loadProjects}
+            onEdit={handleEditInDetail}
+            onDelete={handleDeleteProject}
+            formatCurrency={formatCurrency}
+            formatDate={formatDate}
+            formatLength={formatLength}
+            formatArea={formatArea}
+            calculateTotalFromBoQ={calculateTotalFromBoQ}
+            getProgress={getProgress}
+            darkMode={darkMode}
+          />
+        ) : null;
+      default:
+        return null;
+    }
+  }, [
+    view, projects, loading, error, selected, 
+    getProgress, handleViewDetail, handleEditProject, 
+    handleReload, handleSaveSuccess, handleFormCancel,
+    handleEditInDetail, handleDeleteProject, loadProjects,
+    calculateTotalFromBoQ, darkMode
+  ]);
+
+  return (
+    <div className={`min-h-screen ${darkMode ? 'dark bg-gradient-to-b from-gray-900 to-black text-white' : 'bg-gradient-to-b from-gray-50 to-gray-100 text-gray-900'} p-4 md:p-6`}>
+      <Nav
+        view={view}
+        setView={setView}
+        projectsLength={projects.length}
+        exportData={exportData}
+        importData={importData}
+        darkMode={darkMode}
+        toggleDarkMode={toggleDarkMode}
+      />
+      <main>
+        {currentView}
+      </main>
+      
+      <footer className={`mt-12 pt-8 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'} text-center`}>
+        <p className={darkMode ? 'text-gray-400 text-sm' : 'text-gray-600 text-sm'}>
+          BM Progress Tracker v1.3
+        </p>
+        <p className={`text-xs mt-2 ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+          This work was done in assist of Claude Sonnet. All rights reserved. https://github.com/agungprsety
+        </p>
+      </footer>
+    </div>
+  );
+}
+
+// Summary Component
+const Summary = React.memo(({ 
+  projects, 
+  loading, 
+  error, 
+  getProgress, 
+  formatCurrency, 
+  formatDate,
+  formatLength,
+  formatArea,
+  onViewDetail,
+  onEditProject,
+  onReload,
+  darkMode 
+}) => {
+  const totalValue = useMemo(() => 
+    projects.reduce((s, p) => s + Number(p.contractPrice || 0), 0), 
+    [projects]
+  );
+  
+  const avgProgress = useMemo(() => 
+    projects.length > 0 
+      ? projects.reduce((s, p) => s + getProgress(p), 0) / projects.length 
+      : 0,
+    [projects, getProgress]
+  );
+
+  const totalLength = useMemo(() => 
+    projects.reduce((s, p) => s + (p.length || 0), 0),
+    [projects]
+  );
+
+  const chartData = useMemo(() => 
+    projects.map(p => ({
+      name: p.name.length > 15 ? p.name.substring(0, 12) + '...' : p.name,
+      progress: getProgress(p),
+      value: Number(p.contractPrice || 0)
+    })),
+    [projects, getProgress]
+  );
+
+  const projectsByProgress = useMemo(() => 
+    [...projects].sort((a, b) => getProgress(b) - getProgress(a)),
+    [projects, getProgress]
+  );
+
+  const handleReload = useCallback(() => {
+    if (onReload) onReload();
+  }, [onReload]);
+
+  const bgClass = darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800';
+  const cardBgClass = darkMode ? 'from-gray-800 to-gray-900 border-gray-700' : 'from-white to-gray-50 border-gray-100';
+  const tableHeaderClass = darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-50 text-gray-500';
+  const tableRowClass = darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50';
+  const borderClass = darkMode ? 'border-gray-700' : 'border-gray-200';
+
+  return (
+    <div className="max-w-7xl mx-auto">
+      {error && (
+        <div className={`mb-6 p-4 rounded-lg border ${darkMode ? 'bg-red-900/50 border-red-700 text-red-200' : 'bg-red-50 border-red-200 text-red-600'}`}>
+          <p>{error}</p>
+          <button
+            onClick={handleReload}
+            className={`mt-2 text-sm ${darkMode ? 'text-red-300 underline' : 'text-red-700 underline'}`}
+          >
+            Try again
+          </button>
+        </div>
+      )}
+
+      {loading ? (
+        <LoadingSkeleton darkMode={darkMode} />
+      ) : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div className={`bg-gradient-to-br rounded-xl shadow-lg p-6 border ${cardBgClass}`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className={`text-sm font-medium mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Total Projects</p>
+                  <p className={`text-4xl font-bold ${darkMode ? 'text-white' : 'text-gray-800'} mt-2`}>{projects.length}</p>
+                </div>
+                <div className={`p-3 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-blue-100'}`}>
+                  <BarChart3 className={darkMode ? 'text-blue-400' : 'text-blue-600'} size={28} />
+                </div>
+              </div>
+            </div>
+
+            <div className={`bg-gradient-to-br rounded-xl shadow-lg p-6 border ${cardBgClass}`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className={`text-sm font-medium mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Total Contract Value</p>
+                  <p className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-gray-800'} mt-2`}>{formatCurrency(totalValue)}</p>
+                </div>
+                <div className={`p-3 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-emerald-100'}`}>
+                  <div className={darkMode ? 'text-emerald-400 font-bold' : 'text-emerald-600 font-bold'}>IDR</div>
+                </div>
+              </div>
+            </div>
+
+            <div className={`bg-gradient-to-br rounded-xl shadow-lg p-6 border ${cardBgClass}`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className={`text-sm font-medium mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Total Length</p>
+                  <p className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-gray-800'} mt-2`}>{formatLength(totalLength)}</p>
+                </div>
+                <div className={`p-3 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-amber-100'}`}>
+                  <div className={darkMode ? 'text-amber-400 font-bold' : 'text-amber-600 font-bold'}>m/km</div>
+                </div>
+              </div>
+            </div>
+
+            <div className={`bg-gradient-to-br rounded-xl shadow-lg p-6 border ${cardBgClass}`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className={`text-sm font-medium mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Average Progress</p>
+                  <p className={`text-4xl font-bold ${darkMode ? 'text-white' : 'text-gray-800'} mt-2`}>{avgProgress.toFixed(1)}%</p>
+                </div>
+                <div className="relative w-16 h-16">
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className={darkMode ? 'text-amber-400 font-bold' : 'text-amber-600 font-bold'}>{avgProgress.toFixed(0)}%</div>
+                  </div>
+                  <svg className="w-16 h-16 transform -rotate-90">
+                    <circle
+                      cx="32"
+                      cy="32"
+                      r="28"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                      fill="none"
+                      className={darkMode ? 'text-gray-700' : 'text-amber-200'}
+                    />
+                    <circle
+                      cx="32"
+                      cy="32"
+                      r="28"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                      fill="none"
+                      strokeDasharray={175.93}
+                      strokeDashoffset={175.93 * (1 - avgProgress / 100)}
+                      className={darkMode ? 'text-amber-500' : 'text-amber-600'}
+                    />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {projects.length > 0 && (
+            <div className={`rounded-xl shadow-lg p-6 mb-8 ${bgClass}`}>
+              <h2 className="text-xl font-bold mb-4">Progress Overview</h2>
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "#374151" : "#f0f0f0"} />
+                    <XAxis 
+                      dataKey="name" 
+                      angle={-45} 
+                      textAnchor="end" 
+                      height={80}
+                      tick={{ fontSize: 12 }}
+                      stroke={darkMode ? "#9CA3AF" : "#374151"}
+                    />
+                    <YAxis 
+                      domain={[0, 100]} 
+                      label={{ 
+                        value: 'Progress (%)', 
+                        angle: -90, 
+                        position: 'insideLeft',
+                        offset: 10,
+                        style: { textAnchor: 'middle', fill: darkMode ? '#9CA3AF' : '#374151' }
+                      }}
+                      tick={{ fontSize: 12 }}
+                      stroke={darkMode ? "#9CA3AF" : "#374151"}
+                    />
+                    <Tooltip 
+                      formatter={(value) => [`${value}%`, 'Progress']}
+                      labelStyle={{ fontWeight: 'bold' }}
+                      contentStyle={{ 
+                        borderRadius: '8px',
+                        border: 'none',
+                        backgroundColor: darkMode ? '#1F2937' : 'white',
+                        color: darkMode ? 'white' : '#374151',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                      }}
+                    />
+                    <Bar 
+                      dataKey="progress" 
+                      name="Progress" 
+                      fill={darkMode ? "#3B82F6" : "#3b82f6"}
+                      radius={[4, 4, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          <div className={`rounded-xl shadow-lg overflow-hidden ${bgClass}`}>
+            <div className={`px-6 py-4 border-b ${borderClass} ${darkMode ? 'bg-gradient-to-r from-gray-800 to-gray-900' : 'bg-gradient-to-r from-gray-50 to-white'}`}>
+              <h2 className="text-xl font-bold">All Projects</h2>
+              <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{projects.length} project(s) found</p>
+            </div>
+            
+            {projects.length === 0 ? (
+              <div className="text-center py-16">
+                <div className={darkMode ? 'text-gray-500 mb-4' : 'text-gray-400 mb-4'}>
+                  <BarChart3 size={64} className="mx-auto" />
+                </div>
+                <h3 className={`text-lg font-medium mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>No projects yet</h3>
+                <p className={darkMode ? 'text-gray-500 mb-6' : 'text-gray-500 mb-6'}>Get started by creating your first project</p>
+                <button
+                  onClick={() => onViewDetail && onViewDetail(null)}
+                  className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all font-medium"
+                >
+                  Create First Project
+                </button>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className={tableHeaderClass}>
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Project</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Length</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Location</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Contractor</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Dates</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Value</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Progress</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className={`divide-y ${borderClass}`}>
+                    {projectsByProgress.map(p => (
+                      <tr key={p.id} className={`transition-colors ${tableRowClass}`}>
+                        <td className="px-6 py-4">
+                          <div className="font-medium">{p.name}</div>
+                          <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'} capitalize`}>{p.workType?.replace('-', ' ') || ''}</div>
+                          <div className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                            Photos: {p.photos?.length || 0}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="font-medium">{formatLength(p.length)}</div>
+                          <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                            {p.averageWidth ? `Width: ${p.averageWidth}m` : ''}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          {p.location ? (
+                            <div className="text-sm">
+                              <div className="flex items-center gap-1">
+                                <MapPin size={12} className={darkMode ? 'text-blue-400' : 'text-blue-600'} />
+                                <span className={darkMode ? 'text-gray-300' : 'text-gray-700'}>
+                                  {p.location[0].toFixed(4)}, {p.location[1].toFixed(4)}
+                                </span>
+                              </div>
+                              <div className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'} mt-1`}>
+                                GPS Coordinates
+                              </div>
+                            </div>
+                          ) : (
+                            <span className={`text-sm ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>No location</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm">{p.contractor}</div>
+                          <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{p.supervisor}</div>
+                        </td>
+                        <td className="px-6 py-4 text-sm">
+                          <div>{formatDate(p.startDate)}</div>
+                          <div className={darkMode ? 'text-gray-500' : 'text-gray-400'}>to</div>
+                          <div>{formatDate(p.endDate)}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm font-medium">{formatCurrency(p.contractPrice)}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="flex-1 max-w-xs">
+                              <div className={darkMode ? 'bg-gray-700' : 'bg-gray-200'} style={{ height: '10px', borderRadius: '9999px' }}>
+                                <div 
+                                  className="bg-gradient-to-r from-blue-500 to-blue-600 h-full rounded-full transition-all duration-500"
+                                  style={{ width: `${getProgress(p)}%` }}
+                                ></div>
+                              </div>
+                            </div>
+                            <span className="font-bold min-w-[60px] text-right">
+                              {getProgress(p).toFixed(1)}%
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => onViewDetail && onViewDetail(p)}
+                              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${darkMode ? 'bg-blue-900/50 text-blue-300 hover:bg-blue-900' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}
+                            >
+                              View
+                            </button>
+                            <button
+                              onClick={() => onEditProject && onEditProject(p)}
+                              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${darkMode ? 'bg-amber-900/50 text-amber-300 hover:bg-amber-900' : 'bg-amber-50 text-amber-600 hover:bg-amber-100'}`}
+                            >
+                              Edit
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+});
+
+Summary.displayName = 'Summary';
+
+// ==================== BoQ COMPONENT (UPDATED) ====================
+
+const BoQ = React.memo(({ project, onUpdate, darkMode }) => {
+  const [items, setItems] = useState(project.boq || []);
+  const [newItem, setNewItem] = useState({
+    description: '',
+    quantity: '',
+    unit: '',
+    unitPrice: ''
+  });
+
+  // Calculate totals
+  const totalValue = useMemo(() => 
+    items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0),
+    [items]
+  );
+
+  const completedValue = useMemo(() => 
+    items.reduce((sum, item) => {
+      const completedQty = item.completed || 0;
+      return sum + (completedQty * item.unitPrice);
+    }, 0),
+    [items]
+  );
+
+  const addItem = useCallback(() => {
+    if (!newItem.description || !newItem.quantity || !newItem.unit || !newItem.unitPrice) {
+      alert('Please fill all fields');
+      return;
+    }
+
+    const item = {
+      id: Date.now().toString(),
+      description: newItem.description,
+      quantity: Number(newItem.quantity),
+      unit: newItem.unit,
+      unitPrice: Number(newItem.unitPrice),
+      total: Number(newItem.quantity) * Number(newItem.unitPrice),
+      completed: 0
+    };
+
+    const updatedItems = [...items, item];
+    setItems(updatedItems);
+    setNewItem({ description: '', quantity: '', unit: '', unitPrice: '' });
+    saveBoQ(updatedItems);
+  }, [items, newItem]);
+
+  const deleteItem = useCallback((id) => {
+    const updatedItems = items.filter(item => item.id !== id);
+    setItems(updatedItems);
+    saveBoQ(updatedItems);
+  }, [items]);
+
+  const updateUnitPrice = useCallback((id, unitPrice) => {
+    const updatedItems = items.map(item => {
+      if (item.id === id) {
+        return {
+          ...item,
+          unitPrice: Number(unitPrice),
+          total: item.quantity * Number(unitPrice)
+        };
+      }
+      return item;
+    });
+    setItems(updatedItems);
+    saveBoQ(updatedItems);
+  }, [items]);
+
+  const updateQuantity = useCallback((id, quantity) => {
+    const updatedItems = items.map(item => {
+      if (item.id === id) {
+        return {
+          ...item,
+          quantity: Number(quantity),
+          total: Number(quantity) * item.unitPrice
+        };
+      }
+      return item;
+    });
+    setItems(updatedItems);
+    saveBoQ(updatedItems);
+  }, [items]);
+
+  const saveBoQ = useCallback(async (boqItems) => {
+    const updatedProject = {
+      ...project,
+      boq: boqItems,
+      contractPrice: boqItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0).toString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    await window.storage.set('project:' + updatedProject.id, JSON.stringify(updatedProject));
+    if (onUpdate) onUpdate();
+  }, [project, onUpdate]);
+
+  const handleDescriptionChange = useCallback((e) => 
+    setNewItem(prev => ({ ...prev, description: e.target.value })), []);
+  
+  const handleQuantityChange = useCallback((e) => 
+    setNewItem(prev => ({ ...prev, quantity: e.target.value })), []);
+  
+  const handleUnitChange = useCallback((e) => 
+    setNewItem(prev => ({ ...prev, unit: e.target.value })), []);
+  
+  const handleUnitPriceChange = useCallback((e) => 
+    setNewItem(prev => ({ ...prev, unitPrice: e.target.value })), []);
+
+  const bgClass = darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800';
+  const inputClass = darkMode 
+    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500' 
+    : 'border-gray-300 text-gray-700 placeholder-gray-500 focus:ring-blue-500 focus:border-blue-500';
+  const tableHeaderClass = darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-50 text-gray-500';
+  const tableRowClass = darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50';
+
+  return (
+    <div className={`rounded-xl shadow-lg p-6 mb-6 ${bgClass}`}>
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h3 className="text-xl font-bold">Bill of Quantities (BoQ)</h3>
+          <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+            Contract Value: <span className="font-bold text-blue-600">{formatCurrency(totalValue)}</span>
+            {totalValue > 0 && (
+              <span className="ml-4">
+                Completed Value: <span className="font-bold text-green-600">{formatCurrency(completedValue)}</span>
+                <span className={darkMode ? 'text-gray-500 ml-2' : 'text-gray-500 ml-2'}>
+                  ({totalValue > 0 ? ((completedValue / totalValue) * 100).toFixed(1) : 0}%)
+                </span>
+              </span>
+            )}
+          </p>
+        </div>
+        <button
+          onClick={addItem}
+          className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white px-4 py-2 rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all"
+        >
+          <Plus size={18} /> Add Item
+        </button>
+      </div>
+
+      {/* Add Item Form */}
+      <div className={`grid grid-cols-1 md:grid-cols-5 gap-3 mb-6 p-4 rounded-lg ${darkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
+        <input
+          type="text"
+          placeholder="Description (e.g., Asphalt)"
+          value={newItem.description}
+          onChange={handleDescriptionChange}
+          className={`px-3 py-2 border rounded-md text-sm focus:ring-2 focus:border-blue-500 ${inputClass}`}
+        />
+        <input
+          type="number"
+          placeholder="Quantity"
+          value={newItem.quantity}
+          onChange={handleQuantityChange}
+          className={`px-3 py-2 border rounded-md text-sm focus:ring-2 focus:border-blue-500 ${inputClass}`}
+          min="0"
+          step="0.01"
+        />
+        <input
+          type="text"
+          placeholder="Unit (ton, m³, etc)"
+          value={newItem.unit}
+          onChange={handleUnitChange}
+          className={`px-3 py-2 border rounded-md text-sm focus:ring-2 focus:border-blue-500 ${inputClass}`}
+        />
+        <input
+          type="number"
+          placeholder="Unit Price"
+          value={newItem.unitPrice}
+          onChange={handleUnitPriceChange}
+          className={`px-3 py-2 border rounded-md text-sm focus:ring-2 focus:border-blue-500 ${inputClass}`}
+          min="0"
+          step="1000"
+        />
+        <button
+          onClick={addItem}
+          className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700 transition-colors"
+        >
+          Add to BoQ
+        </button>
+      </div>
+
+      {/* BoQ Table */}
+      {items.length === 0 ? (
+        <div className={`text-center py-12 rounded-lg ${darkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
+          <div className={darkMode ? 'text-gray-500 mb-4' : 'text-gray-400 mb-4'}>
+            <BarChart3 size={48} className="mx-auto" />
+          </div>
+          <h4 className={`text-lg font-medium mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>No BoQ Items Yet</h4>
+          <p className={darkMode ? 'text-gray-500 mb-4' : 'text-gray-500 mb-4'}>Add your first BoQ item to start tracking progress</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className={tableHeaderClass}>
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Description</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Quantity</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Unit</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Unit Price</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Total</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Completed</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Remaining</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody className={`divide-y ${darkMode ? 'divide-gray-700' : 'divide-gray-200'}`}>
+              {items.map(item => {
+                const itemTotal = item.quantity * item.unitPrice;
+                const completedQty = item.completed || 0;
+                const remainingQty = item.quantity - completedQty;
+                const progressPercentage = item.quantity > 0 ? (completedQty / item.quantity) * 100 : 0;
+                
+                return (
+                  <tr key={item.id} className={tableRowClass}>
+                    <td className="px-4 py-3">
+                      <div className="font-medium">{item.description}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <input
+                        type="number"
+                        value={item.quantity}
+                        onChange={(e) => updateQuantity(item.id, e.target.value)}
+                        className={`w-24 px-2 py-1 border rounded text-sm ${inputClass}`}
+                        min="0"
+                        step="0.01"
+                      />
+                    </td>
+                    <td className="px-4 py-3">{item.unit}</td>
+                    <td className="px-4 py-3">
+                      <input
+                        type="number"
+                        value={item.unitPrice}
+                        onChange={(e) => updateUnitPrice(item.id, e.target.value)}
+                        className={`w-32 px-2 py-1 border rounded text-sm ${inputClass}`}
+                        min="0"
+                        step="1000"
+                      />
+                    </td>
+                    <td className="px-4 py-3 font-bold text-blue-600">{formatCurrency(itemTotal)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className={darkMode ? 'text-green-400' : 'text-green-600'}>{completedQty.toLocaleString()}</span>
+                        <span className={darkMode ? 'text-gray-400' : 'text-gray-500'}>{item.unit}</span>
+                      </div>
+                      <div className={`text-xs mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        {progressPercentage.toFixed(1)}% complete
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className={darkMode ? 'text-amber-400' : 'text-amber-600'}>{remainingQty.toLocaleString()}</span>
+                        <span className={darkMode ? 'text-gray-400' : 'text-gray-500'}>{item.unit}</span>
+                      </div>
+                      <div className={`text-xs mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        {((remainingQty / item.quantity) * 100).toFixed(1)}% remaining
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={() => deleteItem(item.id)}
+                        className="text-red-600 hover:text-red-800 p-1"
+                        title="Delete item"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot className={tableHeaderClass}>
+              <tr>
+                <td colSpan="3" className="px-4 py-3 text-right font-bold">TOTAL CONTRACT VALUE:</td>
+                <td colSpan="2" className="px-4 py-3">
+                  <span className="text-blue-600 font-bold">{formatCurrency(totalValue)}</span>
+                  <div className={`text-sm mt-1 ${darkMode ? 'text-green-400' : 'text-green-600'}`}>
+                    Completed Value: {formatCurrency(completedValue)} ({totalValue > 0 ? ((completedValue / totalValue) * 100).toFixed(1) : 0}%)
+                  </div>
+                </td>
+                <td colSpan="2" className="px-4 py-3">
+                  <div className={`text-sm ${darkMode ? 'text-amber-400' : 'text-amber-600'}`}>
+                    Remaining Value: {formatCurrency(totalValue - completedValue)}
+                  </div>
+                </td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+});
+
+BoQ.displayName = 'BoQ';
+
+// Photo Upload Component
+const PhotoUpload = React.memo(({ photos, setPhotos, darkMode }) => {
+  const fileInputRef = useRef(null);
+
+  const handlePhotoUpload = (event) => {
+    const files = Array.from(event.target.files);
+    if (files.length === 0) return;
+
+    // Limit number of photos
+    if (photos.length + files.length > 10) {
+      alert('Maximum 10 photos allowed per weekly report');
+      return;
+    }
+
+    files.forEach(file => {
+      if (!file.type.startsWith('image/')) {
+        alert('Please upload only image files');
+        return;
+      }
+
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image size should be less than 5MB');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const newPhoto = {
+          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+          dataUrl: e.target.result,
+          filename: file.name,
+          size: file.size,
+          type: file.type,
+          uploadedAt: new Date().toISOString(),
+          description: ''
+        };
+        setPhotos(prev => [...prev, newPhoto]);
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // Reset file input
+    event.target.value = '';
+  };
+
+  const removePhoto = (id) => {
+    setPhotos(prev => prev.filter(photo => photo.id !== id));
+  };
+
+  const updateDescription = (id, description) => {
+    setPhotos(prev => prev.map(photo => 
+      photo.id === id ? { ...photo, description } : photo
+    ));
+  };
+
+  const triggerFileInput = () => {
+    fileInputRef.current.click();
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+          Photos ({photos.length}/10)
+        </label>
+        <button
+          type="button"
+          onClick={triggerFileInput}
+          className="flex items-center gap-2 bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 text-sm"
+        >
+          <Camera size={14} /> Add Photos
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          onChange={handlePhotoUpload}
+          className="hidden"
+        />
+      </div>
+
+      {photos.length === 0 ? (
+        <div className={`text-center py-8 rounded-lg border-2 border-dashed ${darkMode ? 'border-gray-600 bg-gray-700/30' : 'border-gray-300 bg-gray-50'}`}>
+          <Camera className={`h-12 w-12 mx-auto mb-4 ${darkMode ? 'text-gray-500' : 'text-gray-400'}`} />
+          <p className={darkMode ? 'text-gray-400' : 'text-gray-500'}>No photos added yet</p>
+          <p className={`text-sm mt-1 ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>Upload photos of this week's work</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          {photos.map(photo => (
+            <div key={photo.id} className={`rounded-lg overflow-hidden border ${darkMode ? 'border-gray-600' : 'border-gray-200'}`}>
+              <div className="relative aspect-square">
+                <img 
+                  src={photo.dataUrl} 
+                  alt={photo.description || 'Weekly report photo'}
+                  className="w-full h-full object-cover"
+                />
+                <button
+                  onClick={() => removePhoto(photo.id)}
+                  className="absolute top-2 right-2 bg-red-600 text-white p-1 rounded-full hover:bg-red-700"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="p-2">
+                <input
+                  type="text"
+                  value={photo.description}
+                  onChange={(e) => updateDescription(photo.id, e.target.value)}
+                  placeholder="Add description..."
+                  className={`w-full px-2 py-1 text-sm border rounded ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-700'}`}
+                />
+                <div className={`text-xs mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  {photo.filename} • {(photo.size / 1024 / 1024).toFixed(2)}MB
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+});
+
+PhotoUpload.displayName = 'PhotoUpload';
+
+// ==================== Weekly Reports Component (UPDATED) ====================
+
+const Weekly = React.memo(({ project, onUpdate, darkMode }) => {
+  const [reports, setReports] = useState(project.weeklyReports || []);
+  const [showModal, setShowModal] = useState(false);
+  const [newReport, setNewReport] = useState({
+    weekNumber: '',
+    date: '',
+    notes: '',
+    workItems: [],
+    photos: []
+  });
+
+  const boqItems = project.boq || [];
+  const totalContractValue = useMemo(() => 
+    boqItems.reduce((total, item) => total + (item.quantity * item.unitPrice), 0),
+    [boqItems]
+  );
+
+  const openModal = useCallback(() => {
+    if (boqItems.length === 0) {
+      alert('Please add BoQ items first!');
+      return;
+    }
+
+    setNewReport({
+      weekNumber: reports.length > 0 ? Math.max(...reports.map(r => r.weekNumber)) + 1 : 1,
+      date: new Date().toISOString().split('T')[0],
+      notes: '',
+      workItems: [{ boqItemId: '', qtyCompleted: '', description: '' }],
+      photos: []
+    });
+    setShowModal(true);
+  }, [boqItems.length, reports]);
+
+  const addWorkItem = useCallback(() => {
+    setNewReport(prev => ({
+      ...prev,
+      workItems: [...prev.workItems, { boqItemId: '', qtyCompleted: '', description: '' }]
+    }));
+  }, []);
+
+  const updateWorkItem = useCallback((index, field, value) => {
+    setNewReport(prev => {
+      const updatedWorkItems = [...prev.workItems];
+      updatedWorkItems[index][field] = value;
+      return { ...prev, workItems: updatedWorkItems };
+    });
+  }, []);
+
+  const removeWorkItem = useCallback((index) => {
+    setNewReport(prev => ({
+      ...prev,
+      workItems: prev.workItems.filter((_, i) => i !== index)
+    }));
+  }, []);
+
+  const setPhotos = useCallback((photos) => {
+    setNewReport(prev => ({ ...prev, photos }));
+  }, []);
+
+  // Calculate weekly progress using BoQ items
+  const calculateWeeklyProgress = useCallback(() => {
+    if (totalContractValue === 0 || newReport.workItems.length === 0) return 0;
+
+    let weeklyValue = 0;
+    newReport.workItems.forEach(workItem => {
+      const boqItem = boqItems.find(item => item.id === workItem.boqItemId);
+      if (boqItem && workItem.qtyCompleted && parseFloat(workItem.qtyCompleted) > 0) {
+        weeklyValue += parseFloat(workItem.qtyCompleted) * boqItem.unitPrice;
+      }
+    });
+
+    return (weeklyValue / totalContractValue) * 100;
+  }, [totalContractValue, newReport.workItems, boqItems]);
+
+  const saveWeeklyReport = useCallback(async () => {
+    if (!newReport.weekNumber || !newReport.date || newReport.workItems.length === 0) {
+      alert('Please fill all required fields and add at least one work item');
+      return;
+    }
+
+    // Validate all work items
+    for (const workItem of newReport.workItems) {
+      if (!workItem.boqItemId || !workItem.qtyCompleted || parseFloat(workItem.qtyCompleted) <= 0) {
+        alert('Please select BoQ item and enter valid quantity for all work items');
+        return;
+      }
+
+      const boqItem = boqItems.find(item => item.id === workItem.boqItemId);
+      const completedQty = parseFloat(workItem.qtyCompleted);
+      
+      if (completedQty <= 0) {
+        alert('Quantity completed must be greater than 0');
+        return;
+      }
+
+      const totalCompleted = (boqItem.completed || 0) + completedQty;
+      if (totalCompleted > boqItem.quantity) {
+        alert(`Cannot complete more than planned quantity for ${boqItem.description}. Max: ${boqItem.quantity - (boqItem.completed || 0)} ${boqItem.unit}`);
+        return;
+      }
+    }
+
+    const weeklyProgress = calculateWeeklyProgress();
+    const previousCumulative = reports.length > 0 
+      ? reports[reports.length - 1].cumulativeProgress 
+      : 0;
+    const cumulativeProgress = previousCumulative + weeklyProgress;
+
+    // Update BoQ completed quantities
+    const updatedBoq = [...boqItems];
+    newReport.workItems.forEach(workItem => {
+      const boqItem = updatedBoq.find(item => item.id === workItem.boqItemId);
+      if (boqItem) {
+        boqItem.completed = (boqItem.completed || 0) + parseFloat(workItem.qtyCompleted);
+      }
+    });
+
+    // Add project ID and week number to photos
+    const photosWithMetadata = newReport.photos.map(photo => ({
+      ...photo,
+      projectId: project.id,
+      weekNumber: parseInt(newReport.weekNumber),
+      date: newReport.date
+    }));
+
+    // Update project photos
+    const updatedPhotos = [...(project.photos || []), ...photosWithMetadata];
+
+    const report = {
+      id: Date.now().toString(),
+      weekNumber: parseInt(newReport.weekNumber),
+      date: newReport.date,
+      notes: newReport.notes,
+      workItems: newReport.workItems.map(item => ({
+        ...item,
+        qtyCompleted: parseFloat(item.qtyCompleted)
+      })),
+      photos: photosWithMetadata,
+      weeklyProgress: weeklyProgress,
+      cumulativeProgress: cumulativeProgress,
+      createdAt: new Date().toISOString()
+    };
+
+    const updatedReports = [...reports, report].sort((a, b) => a.weekNumber - b.weekNumber);
+    
+    const updatedProject = {
+      ...project,
+      weeklyReports: updatedReports,
+      boq: updatedBoq,
+      photos: updatedPhotos,
+      updatedAt: new Date().toISOString()
+    };
+
+    await window.storage.set('project:' + updatedProject.id, JSON.stringify(updatedProject));
+    setReports(updatedReports);
+    setShowModal(false);
+    if (onUpdate) onUpdate();
+  }, [newReport, boqItems, calculateWeeklyProgress, reports, project, onUpdate]);
+
+  const deleteWeeklyReport = useCallback(async (reportId) => {
+    if (!window.confirm('Delete this weekly report? This will also delete associated photos and recalculate all progress.')) return;
+
+    const reportToDelete = reports.find(r => r.id === reportId);
+    if (!reportToDelete) return;
+
+    // Reset BoQ completed quantities and recalculate from scratch
+    const updatedBoq = boqItems.map(item => ({
+      ...item,
+      completed: 0
+    }));
+
+    // Remove photos from this report
+    const remainingPhotos = project.photos?.filter(photo => 
+      !reportToDelete.photos?.some(reportPhoto => reportPhoto.id === photo.id)
+    ) || [];
+
+    const remainingReports = reports.filter(r => r.id !== reportId);
+    
+    // Recalculate progress for remaining reports
+    let cumulativeProgress = 0;
+    const recalculatedReports = remainingReports.map(report => {
+      let weeklyValue = 0;
+      report.workItems.forEach(workItem => {
+        const boqItem = updatedBoq.find(item => item.id === workItem.boqItemId);
+        if (boqItem) {
+          boqItem.completed += workItem.qtyCompleted;
+          weeklyValue += workItem.qtyCompleted * boqItem.unitPrice;
+        }
+      });
+      
+      const weeklyProgress = (weeklyValue / totalContractValue) * 100;
+      cumulativeProgress += weeklyProgress;
+      
+      return {
+        ...report,
+        weeklyProgress: weeklyProgress,
+        cumulativeProgress: cumulativeProgress
+      };
+    });
+
+    const updatedProject = {
+      ...project,
+      weeklyReports: recalculatedReports,
+      boq: updatedBoq,
+      photos: remainingPhotos,
+      updatedAt: new Date().toISOString()
+    };
+
+    await window.storage.set('project:' + updatedProject.id, JSON.stringify(updatedProject));
+    setReports(recalculatedReports);
+    if (onUpdate) onUpdate();
+  }, [reports, boqItems, totalContractValue, project, onUpdate]);
+
+  const handleWeekNumberChange = useCallback((e) => 
+    setNewReport(prev => ({ ...prev, weekNumber: e.target.value })), []);
+  
+  const handleDateChange = useCallback((e) => 
+    setNewReport(prev => ({ ...prev, date: e.target.value })), []);
+  
+  const handleNotesChange = useCallback((e) => 
+    setNewReport(prev => ({ ...prev, notes: e.target.value })), []);
+  
+  const handleWorkItemBoqChange = useCallback((index, e) => 
+    updateWorkItem(index, 'boqItemId', e.target.value), [updateWorkItem]);
+  
+  const handleWorkItemQtyChange = useCallback((index, e) => 
+    updateWorkItem(index, 'qtyCompleted', e.target.value), [updateWorkItem]);
+  
+  const handleWorkItemDescChange = useCallback((index, e) => 
+    updateWorkItem(index, 'description', e.target.value), [updateWorkItem]);
+
+  const closeModal = useCallback(() => setShowModal(false), []);
+
+  const bgClass = darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800';
+  const inputClass = darkMode 
+    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500' 
+    : 'border-gray-300 text-gray-700 placeholder-gray-500 focus:ring-blue-500 focus:border-blue-500';
+  const tableHeaderClass = darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-50 text-gray-500';
+  const tableRowClass = darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50';
+  const borderClass = darkMode ? 'border-gray-700' : 'border-gray-200';
+
+  return (
+    <div className={`rounded-xl shadow-lg p-6 mb-6 ${bgClass}`}>
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h3 className="text-xl font-bold">Weekly Reports</h3>
+          <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+            Progress is automatically calculated from completed BoQ items
+          </p>
+        </div>
+        <button
+          onClick={openModal}
+          className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white px-4 py-2 rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all"
+        >
+          <Plus size={18} /> Add Week
+        </button>
+      </div>
+
+      {reports.length === 0 ? (
+        <div className={`text-center py-12 rounded-lg ${darkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
+          <div className={darkMode ? 'text-gray-500 mb-4' : 'text-gray-400 mb-4'}>
+            <Calendar size={48} className="mx-auto" />
+          </div>
+          <h4 className={`text-lg font-medium mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>No Weekly Reports Yet</h4>
+          <p className={darkMode ? 'text-gray-500 mb-4' : 'text-gray-500 mb-4'}>Add your first weekly report to track progress over time</p>
+          <button
+            onClick={openModal}
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Add First Report
+          </button>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className={tableHeaderClass}>
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Week</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Date</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Work Items</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Photos</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Completed Qty</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Weekly Progress</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Cumulative Progress</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Notes</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody className={`divide-y ${borderClass}`}>
+              {reports.map(report => (
+                <tr key={report.id} className={tableRowClass}>
+                  <td className="px-4 py-3 font-bold">Week {report.weekNumber}</td>
+                  <td className="px-4 py-3">{formatDate(report.date)}</td>
+                  <td className="px-4 py-3">
+                    <div className="text-sm">
+                      {report.workItems.length} item(s)
+                      {report.workItems.length > 0 && (
+                        <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mt-1`}>
+                          {report.workItems.slice(0, 2).map((workItem, idx) => {
+                            const boqItem = boqItems.find(item => item.id === workItem.boqItemId);
+                            return boqItem ? (
+                              <div key={idx} className="truncate">
+                                {boqItem.description}
+                              </div>
+                            ) : null;
+                          })}
+                          {report.workItems.length > 2 && (
+                            <div className="text-blue-600">+{report.workItems.length - 2} more</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="text-sm">
+                      {report.photos?.length || 0} photo(s)
+                      {report.photos && report.photos.length > 0 && (
+                        <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mt-1`}>
+                          Click to view
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    {report.workItems.map((workItem, idx) => {
+                      const boqItem = boqItems.find(item => item.id === workItem.boqItemId);
+                      return boqItem ? (
+                        <div key={idx} className="text-sm mb-1">
+                          {workItem.qtyCompleted.toLocaleString()} {boqItem.unit}
+                        </div>
+                      ) : null;
+                    })}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <div className={`px-2 py-1 rounded-full text-xs font-bold ${report.weeklyProgress > 0 ? (darkMode ? 'bg-green-900 text-green-300' : 'bg-green-100 text-green-800') : (darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-800')}`}>
+                        +{report.weeklyProgress.toFixed(2)}%
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="space-y-1">
+                      <div className="text-lg font-bold text-blue-600">{report.cumulativeProgress.toFixed(2)}%</div>
+                      <div className={`w-full ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} rounded-full h-2`}>
+                        <div
+                          className="bg-gradient-to-r from-blue-500 to-blue-600 h-2 rounded-full"
+                          style={{ width: `${Math.min(100, report.cumulativeProgress)}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    {report.notes ? (
+                      <div className="max-w-xs truncate" title={report.notes}>
+                        {report.notes}
+                      </div>
+                    ) : '-'}
+                  </td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={() => deleteWeeklyReport(report.id)}
+                      className="text-red-600 hover:text-red-800 p-1"
+                      title="Delete report"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Add Weekly Report Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4">
+          <div className={`rounded-xl shadow-2xl p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto ${darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'}`}>
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold">Add Weekly Report</h3>
+              <button
+                onClick={closeModal}
+                className={darkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'}
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div>
+                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Week Number *</label>
+                <input
+                  type="number"
+                  value={newReport.weekNumber}
+                  onChange={handleWeekNumberChange}
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:border-blue-500 ${inputClass}`}
+                  min="1"
+                />
+              </div>
+              <div>
+                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Date *</label>
+                <input
+                  type="date"
+                  value={newReport.date}
+                  onChange={handleDateChange}
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:border-blue-500 ${inputClass}`}
+                />
+              </div>
+            </div>
+
+            {/* Work Items Section */}
+            <div className="mb-6">
+              <div className="flex justify-between items-center mb-4">
+                <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Work Completed This Week *</label>
+                <button
+                  onClick={addWorkItem}
+                  className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center gap-1"
+                >
+                  <Plus size={16} /> Add Work Item
+                </button>
+              </div>
+
+              {newReport.workItems.length === 0 ? (
+                <div className={`text-center py-6 rounded-lg border-2 border-dashed ${darkMode ? 'bg-gray-700/50 border-gray-600 text-gray-400' : 'bg-gray-50 border-gray-300 text-gray-500'}`}>
+                  <p>No work items added yet</p>
+                  <p className="text-sm mt-1">Add at least one work item to calculate progress</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {newReport.workItems.map((workItem, index) => {
+                    const selectedBoqItem = boqItems.find(item => item.id === workItem.boqItemId);
+                    const remainingQty = selectedBoqItem ? selectedBoqItem.quantity - (selectedBoqItem.completed || 0) : 0;
+                    
+                    return (
+                      <div key={index} className={`p-4 rounded-lg border ${darkMode ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-50 border-gray-200'}`}>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
+                          <div>
+                            <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>BoQ Item *</label>
+                            <select
+                              value={workItem.boqItemId}
+                              onChange={(e) => handleWorkItemBoqChange(index, e)}
+                              className={`w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:border-blue-500 ${inputClass}`}
+                            >
+                              <option value="">Select BoQ Item</option>
+                              {boqItems.map(item => (
+                                <option key={item.id} value={item.id}>
+                                  {item.description} - {item.quantity} {item.unit} @ {formatCurrency(item.unitPrice)}
+                                  {item.completed !== undefined && (
+                                    ` (Completed: ${item.completed || 0}/${item.quantity} ${item.unit})`
+                                  )}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Quantity Completed *</label>
+                            <div className="flex gap-2">
+                              <input
+                                type="number"
+                                value={workItem.qtyCompleted}
+                                onChange={(e) => handleWorkItemQtyChange(index, e)}
+                                className={`w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:border-blue-500 ${inputClass}`}
+                                placeholder="0.00"
+                                step="0.01"
+                                min="0"
+                                max={remainingQty}
+                              />
+                              <span className={`text-sm self-center ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                                {selectedBoqItem ? selectedBoqItem.unit : ''}
+                              </span>
+                            </div>
+                            {selectedBoqItem && (
+                              <div className={`text-xs mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                                Max: {remainingQty.toFixed(2)} {selectedBoqItem.unit} remaining
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Work Description</label>
+                            <input
+                              type="text"
+                              value={workItem.description}
+                              onChange={(e) => handleWorkItemDescChange(index, e)}
+                              className={`w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:border-blue-500 ${inputClass}`}
+                              placeholder="Describe the work done"
+                            />
+                          </div>
+                          <div className="flex items-end">
+                            <button
+                              onClick={() => removeWorkItem(index)}
+                              className="text-red-600 hover:text-red-800 text-sm flex items-center gap-1"
+                            >
+                              <Trash2 size={14} /> Remove
+                            </button>
+                          </div>
+                        </div>
+                        {selectedBoqItem && workItem.qtyCompleted && parseFloat(workItem.qtyCompleted) > 0 && (
+                          <div className={`text-xs p-2 rounded mt-2 ${darkMode ? 'bg-blue-900/50 text-blue-200' : 'bg-blue-50 text-blue-700'}`}>
+                            <div className="font-medium">
+                              Calculation: ({workItem.qtyCompleted} {selectedBoqItem.unit} × {formatCurrency(selectedBoqItem.unitPrice)}) = {formatCurrency(parseFloat(workItem.qtyCompleted) * selectedBoqItem.unitPrice)}
+                            </div>
+                            <div className="text-xs mt-1">
+                              This contributes {(parseFloat(workItem.qtyCompleted) * selectedBoqItem.unitPrice / totalContractValue * 100).toFixed(2)}% to total progress
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Photo Upload Section */}
+            <div className="mb-6">
+              <PhotoUpload 
+                photos={newReport.photos} 
+                setPhotos={setPhotos}
+                darkMode={darkMode}
+              />
+            </div>
+
+            {/* Progress Calculation Preview */}
+            {newReport.workItems.length > 0 && (
+              <div className={`mb-6 p-4 rounded-lg border ${darkMode ? 'bg-gradient-to-r from-blue-900/50 to-blue-800/50 border-blue-700 text-blue-200' : 'bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200 text-blue-700'}`}>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <div className="text-sm font-medium mb-1">Progress Calculation Preview</div>
+                    <div className="text-xs">
+                      Formula: Σ(Completed Qty × Unit Price) / Total Contract Value × 100
+                    </div>
+                    <div className="text-xs mt-1">
+                      Total Contract Value: {formatCurrency(totalContractValue)}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-bold">{calculateWeeklyProgress().toFixed(2)}%</div>
+                    <div className="text-xs">Weekly Progress</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Notes */}
+            <div className="mb-6">
+              <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Notes (Optional)</label>
+              <textarea
+                value={newReport.notes}
+                onChange={handleNotesChange}
+                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:border-blue-500 ${inputClass}`}
+                rows="3"
+                placeholder="Add any notes about this week's work..."
+              />
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={saveWeeklyReport}
+                className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 text-white px-6 py-3 rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all font-medium"
+              >
+                Save Weekly Report
+              </button>
+              <button
+                onClick={closeModal}
+                className={`px-6 py-3 border rounded-lg hover:bg-gray-50 transition-colors ${
+                  darkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
+
+Weekly.displayName = 'Weekly';
+
+// Project Map Component
+const ProjectMap = React.memo(({ project, darkMode }) => {
+  if (!project.location) {
+    return (
+      <div className={`text-center py-8 rounded-lg ${darkMode ? 'bg-gray-700/30' : 'bg-gray-50'}`}>
+        <MapPin className={`h-12 w-12 mx-auto mb-4 ${darkMode ? 'text-gray-500' : 'text-gray-400'}`} />
+        <p className={darkMode ? 'text-gray-400' : 'text-gray-500'}>No location set for this project</p>
+        <p className={`text-sm mt-1 ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>Edit project to add location</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <h4 className="text-lg font-semibold">Project Location</h4>
+      <div className="h-96 rounded-lg overflow-hidden border border-gray-300 dark:border-gray-600">
+        <MapContainer
+          center={project.location}
+          zoom={15}
+          style={{ height: '100%', width: '100%' }}
+          scrollWheelZoom={true}
+        >
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+          <Marker 
+            position={project.location} 
+            icon={createCustomIcon(darkMode)}
+          >
+            <Popup>
+              <div className="text-sm">
+                <p className="font-semibold">{project.name}</p>
+                <p className="text-gray-600">Contractor: {project.contractor}</p>
+                <p className="text-gray-600">Supervisor: {project.supervisor}</p>
+                <p className="text-gray-600">Lat: {project.location[0].toFixed(6)}</p>
+                <p className="text-gray-600">Lng: {project.location[1].toFixed(6)}</p>
+              </div>
+            </Popup>
+          </Marker>
+        </MapContainer>
+      </div>
+      <div className={`p-3 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
+        <div className="flex items-center gap-2 text-sm">
+          <MapPin size={14} className={darkMode ? 'text-blue-400' : 'text-blue-600'} />
+          <span className={darkMode ? 'text-gray-300' : 'text-gray-700'}>
+            GPS Coordinates: {project.location[0].toFixed(6)}, {project.location[1].toFixed(6)}
+          </span>
+        </div>
+        <div className="text-xs mt-1 opacity-70">
+          Coordinates can be used for navigation and site verification
+        </div>
+      </div>
+    </div>
+  );
+});
+
+ProjectMap.displayName = 'ProjectMap';
+
+// S-Curve Component
+const SCurve = React.memo(({ project, darkMode }) => {
+  const reports = project.weeklyReports || [];
+  
+  if (reports.length === 0) {
+    return (
+      <div className={`rounded-xl shadow-lg p-6 ${darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'}`}>
+        <h3 className="text-xl font-bold mb-4">S-Curve Progress Chart</h3>
+        <div className={`text-center py-12 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+          <BarChart3 size={48} className={`mx-auto mb-4 ${darkMode ? 'text-gray-600' : 'text-gray-300'}`} />
+          <p>Add weekly reports to see the S-curve</p>
+        </div>
+      </div>
+    );
+  }
+
+  const data = useMemo(() => 
+    reports
+      .sort((a, b) => a.weekNumber - b.weekNumber)
+      .map(report => ({
+        week: `W${report.weekNumber}`,
+        'Weekly Progress': report.weeklyProgress,
+        'Cumulative Progress': report.cumulativeProgress,
+        date: report.date
+      })),
+    [reports]
+  );
+
+  const latestProgress = reports.length > 0 ? reports[reports.length - 1].cumulativeProgress : 0;
+
+  return (
+    <div className={`rounded-xl shadow-lg p-6 ${darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'}`}>
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h3 className="text-xl font-bold">S-Curve Progress Chart</h3>
+          <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+            Current Progress: <span className="font-bold text-blue-600">{latestProgress.toFixed(1)}%</span>
+          </p>
+        </div>
+        <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+          {reports.length} week(s) tracked
+        </div>
+      </div>
+
+      <div className="h-96">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "#374151" : "#f0f0f0"} />
+            <XAxis 
+              dataKey="week" 
+              tick={{ fontSize: 12 }}
+              label={{ 
+                value: 'Week', 
+                position: 'insideBottom', 
+                offset: -5,
+                style: { fontSize: 12, fill: darkMode ? '#9CA3AF' : '#374151' }
+              }}
+              stroke={darkMode ? "#9CA3AF" : "#374151"}
+            />
+            <YAxis 
+              domain={[0, 100]} 
+              tick={{ fontSize: 12 }}
+              label={{ 
+                value: 'Progress (%)', 
+                angle: -90, 
+                position: 'insideLeft',
+                offset: 10,
+                style: { fontSize: 12, fill: darkMode ? '#9CA3AF' : '#374151' }
+              }}
+              stroke={darkMode ? "#9CA3AF" : "#374151"}
+            />
+            <Tooltip 
+              formatter={(value) => [`${value.toFixed(2)}%`, 'Progress']}
+              labelFormatter={(label, items) => {
+                const item = items[0]?.payload;
+                return `Week ${label.slice(1)} - ${formatDate(item?.date)}`;
+              }}
+              contentStyle={{ 
+                borderRadius: '8px',
+                border: 'none',
+                backgroundColor: darkMode ? '#1F2937' : 'white',
+                color: darkMode ? 'white' : '#374151',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+              }}
+            />
+            <Legend />
+            <Line 
+              type="monotone" 
+              dataKey="Cumulative Progress" 
+              name="Cumulative Progress"
+              stroke="#3b82f6" 
+              strokeWidth={3}
+              dot={{ r: 4 }}
+              activeDot={{ r: 6 }}
+            />
+            <Line 
+              type="monotone" 
+              dataKey="Weekly Progress" 
+              name="Weekly Progress"
+              stroke="#10b981" 
+              strokeWidth={2}
+              strokeDasharray="5 5"
+              dot={{ r: 3 }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+});
+
+SCurve.displayName = 'SCurve';
+
+// Detail Component
+const Detail = React.memo(({ 
+  project, 
+  onUpdate, 
+  onEdit, 
+  onDelete,
+  formatCurrency,
+  formatDate,
+  formatLength,
+  formatArea,
+  calculateTotalFromBoQ,
+  getProgress,
+  darkMode 
+}) => {
+  const totalValue = useMemo(() => calculateTotalFromBoQ(project.boq || []), [project.boq, calculateTotalFromBoQ]);
+  const progress = useMemo(() => getProgress(project), [project, getProgress]);
+  const area = useMemo(() => (project.length || 0) * (project.averageWidth || 0), [project.length, project.averageWidth]);
+  
+  const completedValue = useMemo(() => 
+    project.boq ? project.boq.reduce((sum, item) => {
+      return sum + ((item.completed || 0) * (item.unitPrice || 0));
+    }, 0) : 0,
+    [project.boq]
+  );
+
+  const handleEdit = useCallback(() => {
+    if (onEdit) onEdit();
+  }, [onEdit]);
+
+  const handleDelete = useCallback(() => {
+    if (onDelete) onDelete(project.id);
+  }, [onDelete, project.id]);
+
+  const handleDeletePhoto = useCallback(async (photoId) => {
+    if (!window.confirm('Delete this photo? This action cannot be undone.')) return;
+
+    const updatedProject = {
+      ...project,
+      photos: project.photos?.filter(photo => photo.id !== photoId) || [],
+      weeklyReports: project.weeklyReports?.map(report => ({
+        ...report,
+        photos: report.photos?.filter(photo => photo.id !== photoId) || []
+      })) || [],
+      updatedAt: new Date().toISOString()
+    };
+
+    await window.storage.set('project:' + updatedProject.id, JSON.stringify(updatedProject));
+    if (onUpdate) onUpdate();
+  }, [project, onUpdate]);
+
+  const bgClass = darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800';
+  const cardBgClass = darkMode ? 'from-gray-800 to-gray-900 border-gray-700' : 'from-white to-gray-50 border-gray-100';
+  const borderClass = darkMode ? 'border-gray-700' : 'border-gray-200';
+
+  return (
+    <div className="max-w-6xl mx-auto">
+      {/* Project Header */}
+      <div className={`rounded-xl shadow-lg p-6 mb-6 ${bgClass}`}>
+        <div className="flex justify-between items-start mb-6">
+          <div>
+            <h2 className="text-2xl font-bold mb-2">{project.name}</h2>
+            <div className="flex flex-wrap gap-2 mb-4">
+              <span className={`px-3 py-1 rounded-full text-xs font-medium ${darkMode ? 'bg-blue-900 text-blue-300' : 'bg-blue-100 text-blue-700'}`}>
+                {project.workType?.replace('-', ' ') || ''}
+              </span>
+              <span className={`px-3 py-1 rounded-full text-xs font-medium ${darkMode ? 'bg-green-900 text-green-300' : 'bg-green-100 text-green-700'}`}>
+                {project.roadHierarchy || ''}
+              </span>
+              <span className={`px-3 py-1 rounded-full text-xs font-medium ${darkMode ? 'bg-purple-900 text-purple-300' : 'bg-purple-100 text-purple-700'}`}>
+                {project.maintenanceType || ''}
+              </span>
+              {project.location && (
+                <span className={`px-3 py-1 rounded-full text-xs font-medium ${darkMode ? 'bg-amber-900 text-amber-300' : 'bg-amber-100 text-amber-700'}`}>
+                  <MapPin size={10} className="inline mr-1" />
+                  Location Set
+                </span>
+              )}
+            </div>
+            <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Project ID: {project.id}</p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleEdit}
+              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Edit2 size={18} /> Edit
+            </button>
+            <button
+              onClick={handleDelete}
+              className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
+            >
+              <Trash2 size={18} /> Delete
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+          <div className={`bg-gradient-to-br p-6 rounded-xl border ${cardBgClass}`}>
+            <h3 className="font-semibold mb-3">Project Info</h3>
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Contractor:</span>
+                <span className="font-medium">{project.contractor}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Supervisor:</span>
+                <span className="font-medium">{project.supervisor}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Dates:</span>
+                <span className="font-medium">
+                  {formatDate(project.startDate)} - {formatDate(project.endDate)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Length:</span>
+                <span className="font-medium">{formatLength(project.length)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Avg. Width:</span>
+                <span className="font-medium">{project.averageWidth ? `${project.averageWidth}m` : '-'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Area:</span>
+                <span className="font-medium">{formatArea(area)}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className={`bg-gradient-to-br p-6 rounded-xl border ${cardBgClass}`}>
+            <h3 className="font-semibold mb-3">Financial Summary</h3>
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Total Value:</span>
+                <span className="font-bold text-blue-600">{formatCurrency(totalValue)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Completed Value:</span>
+                <span className="font-bold text-green-600">{formatCurrency(completedValue)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Remaining Value:</span>
+                <span className="font-bold text-amber-600">{formatCurrency(totalValue - completedValue)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Progress Value:</span>
+                <span className="font-bold text-purple-600">{formatCurrency(totalValue * progress / 100)}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className={`bg-gradient-to-br p-6 rounded-xl border ${cardBgClass}`}>
+            <h3 className="font-semibold mb-3">Progress Summary</h3>
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Current Progress:</span>
+                <span className="font-bold text-purple-600">{progress.toFixed(1)}%</span>
+              </div>
+              <div className="flex justify-between">
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>BoQ Items:</span>
+                <span className="font-medium">{project.boq?.length || 0} items</span>
+              </div>
+              <div className="flex justify-between">
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Weekly Reports:</span>
+                <span className="font-medium">{project.weeklyReports?.length || 0} weeks</span>
+              </div>
+              <div className="flex justify-between">
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Photos:</span>
+                <span className="font-medium">{project.photos?.length || 0} photos</span>
+              </div>
+              <div className="flex justify-between">
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Road Length:</span>
+                <span className="font-medium">{formatLength(project.length)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Work Area:</span>
+                <span className="font-medium">{formatArea(area)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Progress Bar */}
+        <div className="mt-4">
+          <div className={`flex justify-between text-sm mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+            <span>Project Progress</span>
+            <span>{progress.toFixed(2)}%</span>
+          </div>
+          <div className={`w-full ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} rounded-full h-4`}>
+            <div
+              className="bg-gradient-to-r from-blue-500 via-blue-600 to-blue-700 h-4 rounded-full transition-all duration-500"
+              style={{ width: `${progress}%` }}
+            ></div>
+          </div>
+          <div className={`flex justify-between text-xs mt-1 ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+            <span>{formatCurrency(completedValue)} completed</span>
+            <span>{formatCurrency(totalValue - completedValue)} remaining</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Project Map Section */}
+      <div className={`rounded-xl shadow-lg p-6 mb-6 ${bgClass}`}>
+        <ProjectMap project={project} darkMode={darkMode} />
+      </div>
+
+      {/* Photo Gallery Section */}
+      <div className={`rounded-xl shadow-lg p-6 mb-6 ${bgClass}`}>
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h3 className="text-xl font-bold">Project Photos</h3>
+            <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+              {project.photos?.length || 0} photo(s) from weekly reports
+            </p>
+          </div>
+          <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+            Click to preview, hover to delete
+          </div>
+        </div>
+        <PhotoGallery 
+          photos={project.photos || []} 
+          projectId={project.id} 
+          darkMode={darkMode}
+          onDeletePhoto={handleDeletePhoto}
+        />
+      </div>
+
+      {/* BoQ Section */}
+      <BoQ project={project} onUpdate={onUpdate} darkMode={darkMode} />
+
+      {/* Weekly Reports Section */}
+      <Weekly project={project} onUpdate={onUpdate} darkMode={darkMode} />
+
+      {/* S-Curve Section */}
+      <SCurve project={project} darkMode={darkMode} />
+    </div>
+  );
+});
+
+Detail.displayName = 'Detail';
+
+export default App;
