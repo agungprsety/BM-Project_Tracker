@@ -219,7 +219,7 @@ function App() {
           BM Progress Tracker v1.3
         </p>
         <p className={`text-xs mt-2 ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-          This work was done in assist of Claude Sonnet. All rights reserved. https://github.com/agungprsety
+          https://github.com/agungprsety
         </p>
       </footer>
     </div>
