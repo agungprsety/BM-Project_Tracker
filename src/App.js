@@ -5,7 +5,6 @@ import Summary from './components/Summary';
 import Detail from './components/Detail';
 import ProjectForm from './components/ProjectForm';
 import { setProjects, setLoading, setError } from './store/projectsSlice';
-import './data/storage';
 import { formatCurrency, formatDate, formatLength, formatArea } from './utils';
 import { exportSummaryPDF } from './utils/pdfExport';
 import 'leaflet/dist/leaflet.css';
@@ -16,8 +15,13 @@ function App() {
   const [view, setView] = useState('summary');
   const [selected, setSelected] = useState(null);
   const [darkMode, setDarkMode] = useState(() => {
-    const saved = localStorage.getItem('darkMode');
-    return saved ? JSON.parse(saved) : false;
+    try {
+      const saved = localStorage.getItem('darkMode');
+      return saved ? JSON.parse(saved) : false;
+    } catch (e) {
+      console.warn('Failed to parse darkMode:', e);
+      return false;
+    }
   });
 
   useEffect(() => {
