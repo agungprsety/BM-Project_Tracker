@@ -35,9 +35,7 @@ export default function Login() {
         <div className="flex items-center justify-center min-h-[80vh] px-4">
             <Card darkMode={darkMode} className="w-full max-w-md p-8 md:p-10 shadow-2xl">
                 <div className="text-center mb-8">
-                    <div className={`inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 ${darkMode ? 'bg-blue-900/50' : 'bg-blue-100'}`}>
-                        <LogIn className="w-8 h-8 text-blue-600" />
-                    </div>
+                    <img src="/logo.png" alt="SigiMarga" className="h-16 w-auto mx-auto mb-4" />
                     <h1 className="text-2xl font-bold mb-2">Staff Login</h1>
                     <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                         Sign in to manage projects and track progress.

@@ -2,6 +2,8 @@
 
 <div align="center">
 
+<img src="sigimarga.png" alt="SigiMarga Logo" width="400" />
+
 **Digital Intelligence for Urban Infrastructure**
 
 The professional monitoring ecosystem for Bina Marga Kota Jambi.

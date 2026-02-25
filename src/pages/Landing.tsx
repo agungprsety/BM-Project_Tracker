@@ -33,6 +33,13 @@ export default function Landing() {
                 </div>
 
                 <div className="relative max-w-5xl mx-auto text-center py-24 md:py-36 px-4">
+                    {/* Logo */}
+                    <img
+                        src="/logo.png"
+                        alt="SigiMarga"
+                        className="h-20 md:h-28 w-auto mx-auto mb-8 drop-shadow-lg"
+                    />
+
                     {/* Badge */}
                     <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold tracking-wider uppercase mb-8 ${dm ? 'bg-blue-900/60 text-blue-300 border border-blue-700/50' : 'bg-blue-50 text-blue-700 border border-blue-200'}`}>
                         <span className="relative flex h-2 w-2">
