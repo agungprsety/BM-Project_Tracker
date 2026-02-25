@@ -35,7 +35,7 @@ export default function Landing() {
                 <div className="relative max-w-5xl mx-auto text-center py-24 md:py-36 px-4">
                     {/* Logo */}
                     <img
-                        src="/logo.png"
+                        src="/sigi_margafull.png.jpg"
                         alt="SigiMarga"
                         className="h-20 md:h-28 w-auto mx-auto mb-8 drop-shadow-lg"
                     />

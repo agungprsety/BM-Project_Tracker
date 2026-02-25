@@ -18,7 +18,7 @@ const BUCKETS = [
     { label: '75–100%', key: 'done', color: '#16a34a', min: 75, max: 101 },
 ] as const;
 
-type SortKey = 'name' | 'contractor' | 'supervisor' | 'progress' | 'value' | 'district' | 'subDistrict';
+type SortKey = 'name' | 'contractor' | 'supervisor' | 'progress' | 'value' | 'district' | 'subDistrict' | 'averageWidth' | 'length' | 'roadHierarchy';
 type SortDir = 'asc' | 'desc';
 
 export default function PublicDashboard() {
@@ -52,24 +52,8 @@ export default function PublicDashboard() {
         : 0;
     const totalLength = enriched.reduce((s, p) => s + (p.length || 0), 0);
 
-    // Distribution histogram data
-    const distributionData = useMemo(() =>
-        BUCKETS.map((b) => ({
-            ...b,
-            count: enriched.filter((p) => p._progress >= b.min && p._progress < b.max).length,
-        })),
-        [enriched]
-    );
-
-    // Derive sub-district options from selected filter district
-    const filterSubDistrictOptions = useMemo(() => {
-        if (!filterDistrict) return [];
-        const d = DISTRICTS.find((d) => d.name === filterDistrict);
-        return d ? d.subDistricts : [];
-    }, [filterDistrict]);
-
-    // Filtered + sorted projects
-    const filtered = useMemo(() => {
+    // Filtered projects (excluding bucket filter) - for the chart
+    const projectsForChart = useMemo(() => {
         let list = [...enriched];
 
         // Text search
@@ -83,14 +67,6 @@ export default function PublicDashboard() {
             );
         }
 
-        // Bucket filter
-        if (filterBucket) {
-            const bucket = BUCKETS.find((b) => b.key === filterBucket);
-            if (bucket) {
-                list = list.filter((p) => p._progress >= bucket.min && p._progress < bucket.max);
-            }
-        }
-
         // District filter
         if (filterDistrict) {
             list = list.filter((p) => p.district === filterDistrict);
@@ -99,6 +75,37 @@ export default function PublicDashboard() {
         // Sub-district filter
         if (filterSubDistrict) {
             list = list.filter((p) => p.subDistrict === filterSubDistrict);
+        }
+
+        return list;
+    }, [enriched, search, filterDistrict, filterSubDistrict]);
+
+    // Distribution histogram data
+    const distributionData = useMemo(() =>
+        BUCKETS.map((b) => ({
+            ...b,
+            count: projectsForChart.filter((p) => p._progress >= b.min && p._progress < b.max).length,
+        })),
+        [projectsForChart]
+    );
+
+    // Derive sub-district options from selected filter district
+    const filterSubDistrictOptions = useMemo(() => {
+        if (!filterDistrict) return [];
+        const d = DISTRICTS.find((d) => d.name === filterDistrict);
+        return d ? d.subDistricts : [];
+    }, [filterDistrict]);
+
+    // Filtered + sorted projects
+    const filtered = useMemo(() => {
+        let list = [...projectsForChart];
+
+        // Bucket filter
+        if (filterBucket) {
+            const bucket = BUCKETS.find((b) => b.key === filterBucket);
+            if (bucket) {
+                list = list.filter((p) => p._progress >= bucket.min && p._progress < bucket.max);
+            }
         }
 
         // Sort
@@ -112,12 +119,15 @@ export default function PublicDashboard() {
                 case 'value': cmp = a._value - b._value; break;
                 case 'district': cmp = (a.district || '').localeCompare(b.district || ''); break;
                 case 'subDistrict': cmp = (a.subDistrict || '').localeCompare(b.subDistrict || ''); break;
+                case 'averageWidth': cmp = (a.averageWidth || 0) - (b.averageWidth || 0); break;
+                case 'length': cmp = (a.length || 0) - (b.length || 0); break;
+                case 'roadHierarchy': cmp = (a.roadHierarchy || '').localeCompare(b.roadHierarchy || ''); break;
             }
             return sortDir === 'asc' ? cmp : -cmp;
         });
 
         return list;
-    }, [enriched, search, filterBucket, filterDistrict, filterSubDistrict, sortKey, sortDir]);
+    }, [projectsForChart, filterBucket, sortKey, sortDir]);
 
     // Pagination
     const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
@@ -212,9 +222,9 @@ export default function PublicDashboard() {
                             )}
                         </div>
                         <ResponsiveContainer width="100%" height={150}>
-                            <BarChart data={distributionData} margin={{ left: 0, right: 0, top: 10, bottom: 0 }}>
-                                <XAxis dataKey="label" tick={{ fontSize: 12 }} />
-                                <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                            <BarChart data={distributionData} margin={{ left: 15, right: 10, top: 10, bottom: 20 }}>
+                                <XAxis dataKey="label" tick={{ fontSize: 12 }} label={{ value: 'Progress (%)', position: 'insideBottom', offset: -15, fontSize: 12 }} />
+                                <YAxis allowDecimals={false} tick={{ fontSize: 12 }} label={{ value: 'No. of Projects', angle: -90, position: 'insideLeft', offset: -5, fontSize: 12 }} />
                                 <Tooltip
                                     formatter={(value: number) => [`${value} projects`, 'Count']}
                                     contentStyle={darkMode ? { backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' } : { borderRadius: '8px' }}
@@ -302,6 +312,9 @@ export default function PublicDashboard() {
                                     <tr className={darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-50 text-gray-500'}>
                                         <th className="px-3 py-3 text-left text-xs font-medium cursor-pointer" onClick={() => toggleSort('name')}>Project</th>
                                         <th className="px-3 py-3 text-left text-xs font-medium cursor-pointer" onClick={() => toggleSort('district')}>District</th>
+                                        <th className="px-3 py-3 text-left text-xs font-medium cursor-pointer" onClick={() => toggleSort('averageWidth')}>Avg Width</th>
+                                        <th className="px-3 py-3 text-left text-xs font-medium cursor-pointer" onClick={() => toggleSort('length')}>Length</th>
+                                        <th className="px-3 py-3 text-left text-xs font-medium cursor-pointer" onClick={() => toggleSort('roadHierarchy')}>Road Hierarchy</th>
                                         <th className="px-3 py-3 text-left text-xs font-medium cursor-pointer" onClick={() => toggleSort('progress')}>Progress</th>
                                         <th className="px-3 py-3 text-left text-xs font-medium">Actions</th>
                                     </tr>
@@ -318,9 +331,11 @@ export default function PublicDashboard() {
                                             <tr key={project.id} className={`border-t ${darkMode ? 'border-gray-700 hover:bg-gray-700' : 'border-gray-200 hover:bg-gray-50'} transition-colors`}>
                                                 <td className="px-3 py-3">
                                                     <div className="font-medium">{project.name}</div>
-                                                    <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{project.contractor}</div>
                                                 </td>
                                                 <td className="px-3 py-3 text-sm">{project.district || '-'}</td>
+                                                <td className="px-3 py-3 text-sm">{project.averageWidth ? `${project.averageWidth} m` : '-'}</td>
+                                                <td className="px-3 py-3 text-sm">{project.length ? `${project.length} m` : '-'}</td>
+                                                <td className="px-3 py-3 text-sm">{project.roadHierarchy || '-'}</td>
                                                 <td className="px-3 py-3">
                                                     <div className="flex items-center gap-2">
                                                         <div className={`w-16 ${darkMode ? 'bg-gray-600' : 'bg-gray-200'} rounded-full h-1.5`}>
