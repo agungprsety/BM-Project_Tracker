@@ -38,7 +38,7 @@ export const formatArea = (sqMeters: number | undefined): string => {
 };
 
 export const generateId = (): string => {
-  return `project_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  return crypto.randomUUID();
 };
 
 export const calculateBoQTotal = (boq: { quantity: number; unitPrice: number }[]): number => {

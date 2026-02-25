@@ -172,22 +172,7 @@ export const projectService = {
 
     if (projectError) throw projectError;
 
-    // 2. Insert BoQ Items
-    if (project.boq && project.boq.length > 0) {
-      const boqRows = project.boq.map(b => ({
-        id: b.id,
-        project_id: project.id,
-        item_number: b.itemNumber,
-        description: b.description,
-        unit: b.unit,
-        quantity: b.quantity,
-        unit_price: b.unitPrice
-      }));
-      const { error: boqError } = await supabase.from('boq_items').insert(boqRows);
-      if (boqError) throw boqError;
-    }
-
-    // 3. Insert Weekly Reports & Progress & Photos
+    // 2. Insert all relations (BoQ, Weekly Reports, Photos)
     await this._syncRelations(project.id, project.boq || [], project.weeklyReports || [], project.photos || []);
 
     return project.id;
