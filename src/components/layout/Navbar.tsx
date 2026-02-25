@@ -11,7 +11,7 @@ export default function Navbar() {
 
   const isActive = (path: string) => location.pathname === path;
 
-  const isPublicPage = location.pathname === '/' || location.pathname === '/explore' || location.pathname === '/login' || location.pathname.startsWith('/view');
+
 
   const handleSignOut = async () => {
     await signOut();
@@ -21,7 +21,7 @@ export default function Navbar() {
   return (
     <nav className={`p-4 mb-6 shadow-lg ${darkMode ? 'bg-gradient-to-r from-gray-800 to-gray-900 text-white' : 'bg-gradient-to-r from-blue-700 to-blue-800 text-white'}`}>
       <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
-        <Link to="/" className="flex items-center gap-3 hover:opacity-90 transition-opacity">
+        <Link to={user ? '/dashboard' : '/'} className="flex items-center gap-3 hover:opacity-90 transition-opacity">
           <BarChart3 size={28} />
           <h1 className="text-2xl font-bold tracking-tight">SigiMarga</h1>
         </Link>
@@ -45,7 +45,7 @@ export default function Navbar() {
             {darkMode ? <Sun size={18} /> : <Moon size={18} />}
           </button>
 
-          {user && !isPublicPage && (
+          {user && (
             <>
               <Link
                 to="/dashboard"

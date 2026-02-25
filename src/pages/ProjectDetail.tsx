@@ -35,7 +35,7 @@ export default function ProjectDetail() {
       <div className="max-w-6xl mx-auto">
         <Card darkMode={darkMode} className="text-center py-12">
           <p className="text-lg mb-4">Project not found</p>
-          <Button onClick={() => navigate('/')}>Back to Dashboard</Button>
+          <Button onClick={() => navigate('/dashboard')}>Back to Dashboard</Button>
         </Card>
       </div>
     );
@@ -101,7 +101,7 @@ export default function ProjectDetail() {
       return;
     }
     deleteMutation.mutate(project.id, {
-      onSuccess: () => navigate('/'),
+      onSuccess: () => navigate('/dashboard'),
     });
   };
 

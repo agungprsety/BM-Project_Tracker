@@ -161,7 +161,7 @@ export default function ProjectForm() {
       };
 
       createMutation.mutate(projectData, {
-        onSuccess: () => navigate('/'),
+        onSuccess: () => navigate('/dashboard'),
       });
     }
   };
@@ -331,7 +331,7 @@ export default function ProjectForm() {
           <Button onClick={handleSubmit} isLoading={isSaving}>
             {isEdit ? 'Update Project' : 'Create Project'}
           </Button>
-          <Button variant="secondary" onClick={() => navigate('/')}>
+          <Button variant="secondary" onClick={() => navigate('/dashboard')}>
             Cancel
           </Button>
         </div>

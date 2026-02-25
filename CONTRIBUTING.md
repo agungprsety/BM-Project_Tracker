@@ -1,47 +1,78 @@
 # Contributing to SigiMarga
 
-Thanks for your interest in contributing to SigiMarga! We welcome developers of all skill levels. To ensure a smooth process, please follow these guidelines.
+Thanks for your interest in contributing! We welcome developers of all skill levels.
 
 ## 🛠️ Development Setup
 
-1. Fork and clone the repository.
-2. Install dependencies: `npm install`.
-3. Start the dev server: `npm run dev`.
-4. Ensure you have the `React Developer Tools` and `TanStack Query Devtools` (if applicable) for a better debugging experience.
+1. **Fork & clone** the repository.
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+3. **Set up Supabase** (see [README.md](README.md#2-set-up-supabase) for full instructions):
+   - Create a Supabase project.
+   - Run `supabase_schema.sql` and `supabase_schema_secure.sql` in the SQL Editor.
+   - Create a staff user via Authentication → Add User.
+4. **Configure environment:**
+   ```bash
+   cp .env.example .env
+   ```
+   Fill in your `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+5. **Start the dev server:**
+   ```bash
+   npm run dev
+   ```
 
 ## 🤝 Contribution Workflow
 
-1. **Find an Issue**: Look for open issues or open a new one to discuss an enhancement.
-2. **Branching Strategy**: 
-   - Use descriptive branch names: `feature/add-new-chart`, `fix/login-bug`, `docs/update-readme`.
-   - Branch off from the `main` branch.
-3. **Commit Messages**: 
-   - Follow standard conventions (e.g., `feat: add PDF export`, `fix: correct progress calculation`).
-   - Keep messages concise and descriptive.
-4. **Pull Requests (PRs)**:
-   - Provide a clear description of the changes.
-   - Include screenshots or recordings for UI changes.
-   - Ensure all tests and type-checks pass: `npm run build`.
+1. **Find or open an issue** to discuss the change you'd like to make.
+2. **Create a branch** off `main` with a descriptive name:
+   - `feature/add-new-chart`
+   - `fix/login-redirect`
+   - `docs/update-readme`
+3. **Make your changes** and ensure they pass all checks:
+   ```bash
+   npm run lint      # ESLint
+   npm run build     # TypeScript type-check + production build
+   ```
+4. **Submit a Pull Request** with:
+   - A clear description of the changes.
+   - Screenshots/recordings for any UI changes.
+   - Reference to related issues (e.g., `Closes #12`).
 
-## 🎨 Code Style & Standards
+## 🎨 Code Standards
 
-- **TypeScript**: All new code must be fully typed. Avoid using `any`.
-- **Components**: Use functional components with hooks.
-- **Styling**: Use utility-first Tailwind CSS.
-- **Linting**: Run `npm run lint` before committing to ensure adherence to ESLint rules.
+| Area | Standard |
+|---|---|
+| **Language** | TypeScript — all new code must be fully typed. Avoid `any`. |
+| **Components** | Functional components with React hooks. |
+| **Styling** | Tailwind CSS utility classes. |
+| **State** | React Query for server state, Zustand for UI state. |
+| **Database** | All data access goes through `src/lib/db.ts`. Never call `supabase` directly from components. |
+| **IDs** | Use `crypto.randomUUID()` via `generateId()` for all new entity IDs (Supabase requires UUID format). |
+| **Naming** | `camelCase` in TypeScript, `snake_case` in SQL/Supabase. The mapping layer in `db.ts` handles translation. |
 
-## 📄 Commit Standards (Summary)
+## 📝 Commit Convention
 
-We follow the [Conventional Commits](https://www.conventionalcommits.org/) specification:
-- `feat`: A new feature
-- `fix`: A bug fix
-- `docs`: Documentation only changes
-- `style`: Changes that do not affect the meaning of the code (white-space, formatting, etc.)
-- `refactor`: A code change that neither fixes a bug nor adds a feature
-- `perf`: A code change that improves performance
-- `test`: Adding missing tests or correcting existing tests
-- `chore`: Changes to the build process or auxiliary tools and libraries
+We follow [Conventional Commits](https://www.conventionalcommits.org/):
+
+| Prefix | Use |
+|---|---|
+| `feat:` | A new feature |
+| `fix:` | A bug fix |
+| `docs:` | Documentation only |
+| `style:` | Formatting, whitespace (no logic changes) |
+| `refactor:` | Code restructuring (no new features or fixes) |
+| `perf:` | Performance improvements |
+| `test:` | Adding or updating tests |
+| `chore:` | Build process, dependencies, tooling |
+
+## 🔒 Security Notes
+
+- **Never** commit `.env` files or real API keys.
+- **Never** use the Supabase `service_role` key in frontend code.
+- All database access control is enforced by Row Level Security (RLS) policies — ensure new tables have appropriate RLS enabled.
 
 ---
 
-If you have any questions, please feel free to open a discussion issue!
+Questions? Open a [Discussion](../../discussions) or an issue!
