@@ -61,14 +61,34 @@ export default function ProjectDetail() {
     updateMutation.mutate({ id: project.id, updates: { weeklyReports } });
   };
 
-  const handlePhotoUpload = (files: FileList) => {
-    const newPhotos: Photo[] = Array.from(files).map((file) => ({
-      id: generateId(),
-      url: URL.createObjectURL(file),
-      createdAt: new Date().toISOString(),
-    }));
-    const updatedPhotos = [...(project.photos || []), ...newPhotos];
-    updateMutation.mutate({ id: project.id, updates: { photos: updatedPhotos } });
+  const handlePhotoUpload = async (files: FileList) => {
+    try {
+      // The button handles its own visual loading, we just await all uploads here.
+      // Dynamic import to avoid circular dependency if projectService isn't handy, but we can import it.
+      // Wait, let's import projectService at the top!
+      const { projectService } = await import('@/lib/db');
+
+      const newPhotos: Photo[] = [];
+
+      // Upload sequentially or in parallel. Parallel is faster.
+      const uploadPromises = Array.from(files).map(async (file) => {
+        const publicUrl = await projectService.uploadPhoto(file, project.id);
+        return {
+          id: generateId(),
+          url: publicUrl,
+          createdAt: new Date().toISOString(),
+        };
+      });
+
+      const uploadedPhotos = await Promise.all(uploadPromises);
+      newPhotos.push(...uploadedPhotos);
+
+      const updatedPhotos = [...(project.photos || []), ...newPhotos];
+      updateMutation.mutate({ id: project.id, updates: { photos: updatedPhotos } });
+    } catch (error) {
+      console.error("Failed to upload photos:", error);
+      alert("Failed to upload one or more photos. Are your storage policies and bucket set up?");
+    }
   };
 
   const handleDeletePhoto = (photoId: string) => {

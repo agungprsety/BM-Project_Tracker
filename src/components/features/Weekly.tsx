@@ -13,9 +13,10 @@ interface WeeklyProps {
   contractStartDate: string;
   contractEndDate: string;
   darkMode?: boolean;
+  readonly?: boolean;
 }
 
-export default function Weekly({ projectId, reports = [], boq = [], onUpdate, contractStartDate, contractEndDate, darkMode = false }: WeeklyProps) {
+export default function Weekly({ projectId, reports = [], boq = [], onUpdate, contractStartDate, contractEndDate, darkMode = false, readonly = false }: WeeklyProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
@@ -110,9 +111,11 @@ export default function Weekly({ projectId, reports = [], boq = [], onUpdate, co
             {reports.length} weeks • Overall Progress: {overallProgress.toFixed(1)}%
           </p>
         </div>
-        <Button size="sm" onClick={() => setIsAdding(true)} disabled={boq.length === 0}>
-          Add Report
-        </Button>
+        {!readonly && (
+          <Button size="sm" onClick={() => setIsAdding(true)} disabled={boq.length === 0}>
+            Add Report
+          </Button>
+        )}
       </div>
 
       {boq.length === 0 && (
@@ -157,12 +160,14 @@ export default function Weekly({ projectId, reports = [], boq = [], onUpdate, co
                         }`}>
                         +{weekPercent.toFixed(1)}%
                       </span>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleDeleteReport(report.id); }}
-                        className="text-red-500 hover:text-red-700"
-                      >
-                        ×
-                      </button>
+                      {!readonly && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDeleteReport(report.id); }}
+                          className="text-red-500 hover:text-red-700"
+                        >
+                          ×
+                        </button>
+                      )}
                     </div>
                   </div>
                   {report.workDescription && (
@@ -253,7 +258,7 @@ export default function Weekly({ projectId, reports = [], boq = [], onUpdate, co
       )}
 
       {/* Add Report Form */}
-      {isAdding && (
+      {isAdding && !readonly && (
         <div className={`mt-4 p-4 rounded-lg border ${darkMode ? 'border-gray-600 bg-gray-700' : 'border-gray-200 bg-gray-50'}`}>
           <h4 className="font-semibold mb-3">Add Weekly Report</h4>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">

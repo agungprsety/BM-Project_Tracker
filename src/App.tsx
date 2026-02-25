@@ -1,12 +1,20 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
+import { AuthProvider } from '@/contexts/AuthContext';
 import AppLayout from '@/components/layout/AppLayout';
-import Dashboard from '@/pages/Dashboard';
-import ProjectForm from '@/pages/ProjectForm';
-import ProjectDetail from '@/pages/ProjectDetail';
+import ProtectedRoute from '@/components/layout/ProtectedRoute';
 import { useAppStore } from '@/store';
+
+// Lazy-loaded page components (each becomes its own chunk)
+const Landing = lazy(() => import('@/pages/Landing'));
+const PublicDashboard = lazy(() => import('@/pages/PublicDashboard'));
+const Login = lazy(() => import('@/pages/Login'));
+const Dashboard = lazy(() => import('@/pages/Dashboard'));
+const ProjectForm = lazy(() => import('@/pages/ProjectForm'));
+const ProjectDetail = lazy(() => import('@/pages/ProjectDetail'));
+const ProjectView = lazy(() => import('@/pages/ProjectView'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -16,6 +24,14 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+function LoadingFallback() {
+  return (
+    <div className="flex items-center justify-center min-h-[50vh]">
+      <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-500 border-t-transparent" />
+    </div>
+  );
+}
 
 function DarkModeEffect() {
   const { darkMode } = useAppStore();
@@ -33,21 +49,35 @@ function DarkModeEffect() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <DarkModeEffect />
-        <Routes>
-          <Route element={<AppLayout />}>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/projects/new" element={<ProjectForm />} />
-            <Route path="/projects/:id" element={<ProjectDetail />} />
-            <Route path="/projects/:id/edit" element={<ProjectForm />} />
-          </Route>
-        </Routes>
-        <Toaster position="top-right" richColors />
-      </BrowserRouter>
-    </QueryClientProvider>
+    <AuthProvider>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <DarkModeEffect />
+          <Suspense fallback={<LoadingFallback />}>
+            <Routes>
+              <Route element={<AppLayout />}>
+                {/* Public routes */}
+                <Route path="/" element={<Landing />} />
+                <Route path="/explore" element={<PublicDashboard />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/view/:id" element={<ProjectView />} />
+
+                {/* Protected routes — require login */}
+                <Route element={<ProtectedRoute />}>
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/projects/new" element={<ProjectForm />} />
+                  <Route path="/projects/:id" element={<ProjectDetail />} />
+                  <Route path="/projects/:id/edit" element={<ProjectForm />} />
+                </Route>
+              </Route>
+            </Routes>
+          </Suspense>
+          <Toaster position="top-right" richColors />
+        </BrowserRouter>
+      </QueryClientProvider>
+    </AuthProvider>
   );
 }
 
 export default App;
+

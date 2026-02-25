@@ -42,7 +42,7 @@ function addHeader(doc: jsPDF, title: string, subtitle?: string) {
     // Brand
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
-    doc.text('BM Progress Tracker', pageWidth - 14, 18, { align: 'right' });
+    doc.text('SigiMarga', pageWidth - 14, 18, { align: 'right' });
 
     return 48; // y position after header
 }
@@ -60,7 +60,7 @@ function addFooter(doc: jsPDF) {
         doc.setFontSize(8);
         doc.setTextColor(...COLORS.medium);
         doc.setFont('helvetica', 'normal');
-        doc.text('BM Progress Tracker — Confidential', 14, pageHeight - 10);
+        doc.text('SigiMarga — Confidential', 14, pageHeight - 10);
         doc.text(`Page ${i} of ${pageCount}`, pageWidth - 14, pageHeight - 10, { align: 'right' });
     }
 }

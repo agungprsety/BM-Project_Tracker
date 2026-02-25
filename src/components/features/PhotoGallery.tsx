@@ -4,17 +4,18 @@ import Card from '@/components/ui/Card';
 
 interface PhotoGalleryProps {
   photos: Photo[];
-  onUpload: (files: FileList) => void;
-  onDelete: (id: string) => void;
+  onUpload?: (files: FileList) => void;
+  onDelete?: (id: string) => void;
   darkMode?: boolean;
+  readonly?: boolean;
 }
 
-export default function PhotoGallery({ photos = [], onUpload, onDelete, darkMode = false }: PhotoGalleryProps) {
+export default function PhotoGallery({ photos = [], onUpload, onDelete, darkMode = false, readonly = false }: PhotoGalleryProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      onUpload(e.target.files);
+      onUpload?.(e.target.files);
       e.target.value = '';
     }
   };
@@ -23,22 +24,24 @@ export default function PhotoGallery({ photos = [], onUpload, onDelete, darkMode
     <Card darkMode={darkMode}>
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-xl font-bold">Project Photos</h3>
-        <div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={handleFileChange}
-            className="hidden"
-          />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
-          >
-            Upload Photos
-          </button>
-        </div>
+        {!readonly && (
+          <div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleFileChange}
+              className="hidden"
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+            >
+              Upload Photos
+            </button>
+          </div>
+        )}
       </div>
 
       {photos.length === 0 ? (
@@ -54,14 +57,16 @@ export default function PhotoGallery({ photos = [], onUpload, onDelete, darkMode
                 alt={photo.caption || 'Project photo'}
                 className="w-full h-32 object-cover rounded-lg"
               />
-              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
-                <button
-                  onClick={() => onDelete(photo.id)}
-                  className="px-3 py-1 bg-red-600 text-white rounded text-sm"
-                >
-                  Delete
-                </button>
-              </div>
+              {!readonly && (
+                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                  <button
+                    onClick={() => onDelete?.(photo.id)}
+                    className="px-3 py-1 bg-red-600 text-white rounded text-sm"
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
               {photo.caption && (
                 <p className="text-xs mt-1 text-center truncate">{photo.caption}</p>
               )}

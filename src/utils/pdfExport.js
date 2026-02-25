@@ -7,7 +7,7 @@ export const exportSummaryPDF = (projects, getProgress) => {
   
   // Title
   doc.setFontSize(18);
-  doc.text('BM Progress Tracker - Project Summary', 14, 15);
+  doc.text('SigiMarga - Project Summary', 14, 15);
   doc.setFontSize(10);
   doc.text(`Generated on: ${new Date().toLocaleString('id-ID')}`, 14, 22);
   

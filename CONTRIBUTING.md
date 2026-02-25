@@ -1,6 +1,6 @@
-# Contributing to BM Project Tracker
+# Contributing to SigiMarga
 
-Thanks for your interest in contributing to BM Project Tracker! We welcome developers of all skill levels. To ensure a smooth process, please follow these guidelines.
+Thanks for your interest in contributing to SigiMarga! We welcome developers of all skill levels. To ensure a smooth process, please follow these guidelines.
 
 ## 🛠️ Development Setup
 

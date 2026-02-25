@@ -1,6 +1,6 @@
-﻿# BM Project Tracker
+﻿# SigiMarga
 
-A professional construction project monitoring system designed for Bina Marga (Public Works) departments. This application provides real-time tracking of project progress, financial summaries, and technical documentation via an intuitive web interface.
+A professional construction project monitoring system designed for Bina Marga (Public Works) departments. Tracing every kilometer of progress with real-time tracking, financial summaries, and technical documentation.
 
 ## 🚀 Key Features
 
@@ -40,8 +40,8 @@ A professional construction project monitoring system designed for Bina Marga (P
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-repo/bm-project-tracker.git
-   cd bm-project-tracker
+   git clone https://github.com/your-repo/sigimarga.git
+   cd sigimarga
    ```
 
 2. Install dependencies:

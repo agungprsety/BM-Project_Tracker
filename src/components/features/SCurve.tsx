@@ -14,6 +14,18 @@ interface SCurveProps {
   darkMode?: boolean;
 }
 
+// Sigmoid (logistic) function for realistic S-curve shape:
+// slow start → acceleration → tapering at the end
+const calculateSCurveProgress = (t: number): number => {
+  if (t <= 0) return 0;
+  if (t >= 1) return 1;
+  const k = 10; // steepness: higher = sharper transition
+  const f = (x: number) => 1 / (1 + Math.exp(-k * (x - 0.5)));
+  const f0 = f(0);
+  const f1 = f(1);
+  return (f(t) - f0) / (f1 - f0);
+};
+
 export default function SCurve({ project, darkMode = false }: SCurveProps) {
   const chartData = useMemo(() => {
     if (!project.startDate || !project.endDate) return [];
@@ -30,8 +42,8 @@ export default function SCurve({ project, darkMode = false }: SCurveProps) {
       const date = new Date(start);
       date.setDate(date.getDate() + i);
 
-      const progressPercent = (i / totalDays) * 100;
-      const plannedValue = (progressPercent / 100) * totalBoQValue;
+      const t = i / totalDays; // time fraction 0..1
+      const plannedValue = calculateSCurveProgress(t) * totalBoQValue;
 
       plannedData.push({
         date: date.toLocaleDateString('id-ID', { month: 'short', day: 'numeric' }),

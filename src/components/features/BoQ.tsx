@@ -10,9 +10,10 @@ interface BoQProps {
   boq: BoQItem[];
   onUpdate: (boq: BoQItem[]) => void;
   darkMode?: boolean;
+  readonly?: boolean;
 }
 
-export default function BoQ({ projectId, boq = [], onUpdate, darkMode = false }: BoQProps) {
+export default function BoQ({ projectId, boq = [], onUpdate, darkMode = false, readonly = false }: BoQProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [newItem, setNewItem] = useState({
     itemNumber: '',
@@ -51,9 +52,11 @@ export default function BoQ({ projectId, boq = [], onUpdate, darkMode = false }:
     <Card darkMode={darkMode}>
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-xl font-bold">Bill of Quantities (BoQ)</h3>
-        <Button size="sm" onClick={() => setIsAdding(true)}>
-          Add Item
-        </Button>
+        {!readonly && (
+          <Button size="sm" onClick={() => setIsAdding(true)}>
+            Add Item
+          </Button>
+        )}
       </div>
 
       {boq.length === 0 && !isAdding ? (
@@ -72,7 +75,7 @@ export default function BoQ({ projectId, boq = [], onUpdate, darkMode = false }:
                   <th className="px-3 py-2 text-right">Qty</th>
                   <th className="px-3 py-2 text-right">Unit Price</th>
                   <th className="px-3 py-2 text-right">Total</th>
-                  <th className="px-3 py-2"></th>
+                  {!readonly && <th className="px-3 py-2"></th>}
                 </tr>
               </thead>
               <tbody>
@@ -84,14 +87,16 @@ export default function BoQ({ projectId, boq = [], onUpdate, darkMode = false }:
                     <td className="px-3 py-2 text-right">{item.quantity.toLocaleString('id-ID')}</td>
                     <td className="px-3 py-2 text-right">Rp {item.unitPrice.toLocaleString('id-ID')}</td>
                     <td className="px-3 py-2 text-right font-medium">Rp {(item.quantity * item.unitPrice).toLocaleString('id-ID')}</td>
-                    <td className="px-3 py-2">
-                      <button
-                        onClick={() => handleDeleteItem(item.id)}
-                        className="text-red-500 hover:text-red-700"
-                      >
-                        ×
-                      </button>
-                    </td>
+                    {!readonly && (
+                      <td className="px-3 py-2">
+                        <button
+                          onClick={() => handleDeleteItem(item.id)}
+                          className="text-red-500 hover:text-red-700"
+                        >
+                          ×
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -107,7 +112,7 @@ export default function BoQ({ projectId, boq = [], onUpdate, darkMode = false }:
         </>
       )}
 
-      {isAdding && (
+      {isAdding && !readonly && (
         <div className={`mt-4 p-4 rounded-lg border ${darkMode ? 'border-gray-600 bg-gray-700' : 'border-gray-200 bg-gray-50'}`}>
           <h4 className="font-semibold mb-3">Add New BoQ Item</h4>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">

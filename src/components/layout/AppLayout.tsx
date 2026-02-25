@@ -13,7 +13,7 @@ export default function AppLayout() {
       </main>
       <footer className={`mt-12 pt-8 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'} text-center`}>
         <p className={darkMode ? 'text-gray-400 text-sm' : 'text-gray-600 text-sm'}>
-          BM Progress Tracker v2.0
+          SigiMarga v1.0.0
         </p>
         <p className={`text-xs mt-2 ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
           https://github.com/agungprsety
