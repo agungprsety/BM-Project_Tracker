@@ -1,0 +1,102 @@
+{
+    "nav": {
+        "explore": "Jelajahi",
+        "dashboard": "Dasbor",
+        "newProject": "Proyek Baru",
+        "signOut": "Keluar",
+        "switchToLight": "Mode Terang",
+        "switchToDark": "Mode Gelap"
+    },
+    "landing": {
+        "badge": "Bina Marga Kota Jambi",
+        "title1": "Kecerdasan Digital untuk ",
+        "title2": "Infrastruktur Perkotaan",
+        "subtitle": "SigiMarga adalah ekosistem pemantauan profesional untuk Bina Marga Kota Jambi. Lacak setiap kilometer kemajuan dengan pelacakan geospasial real-time, Kurva-S otomatis, dan dokumentasi siap audit.",
+        "btnStaff": "Buka Dasbor Staf",
+        "btnExplore": "Jelajahi Proyek Publik",
+        "features": {
+            "subtitle": "Dibuat Khusus untuk Insinyur",
+            "title": "Fitur yang Menghemat Jam Kerja, Bukan Menit",
+            "f1Title": "Analitik Teknik Otomatis",
+            "f1Desc": "Berhenti bertarung dengan rumus Excel. Unggah Bill of Quantities (BoQ) Anda dan biarkan SigiMarga menghasilkan Kurva-S dan grafik penyerapan keuangan secara otomatis.",
+            "f2Title": "Pusat Komando Geospasial",
+            "f2Desc": "Visualisasikan pertumbuhan kota Anda. GIS terintegrasi memungkinkan Anda menyematkan proyek, memantau distribusi regional, dan memverifikasi kondisi lokasi dengan GPS.",
+            "f3Title": "Laporan Audit Satu Klik",
+            "f3Desc": "Beralih dari data ke dokumen dalam detik. Ekspor ringkasan PDF profesional untuk tinjauan portofolio atau laporan proyek individu terperinci, siap untuk pemangku kepentingan."
+        },
+        "dual": {
+            "subtitle": "Arsitektur Mesin Ganda",
+            "title": "Transparansi Bertemu Keamanan",
+            "pubBadge": "Jelajah Publik",
+            "pubTitle": "Transparansi Radikal",
+            "pubDesc": "Beri warga Kota Jambi kursi barisan depan untuk melihat kemajuan. Dasbor read-only memungkinkan siapa saja melacak peningkatan jalan, melihat foto lokasi, dan melihat ke mana pajak mereka digunakan.",
+            "pubBtn": "Telusuri Dasbor Publik",
+            "staffBadge": "Portal Staf",
+            "staffTitle": "Manajemen Lapangan Aman",
+            "staffDesc": "Ruang kerja berkinerja tinggi untuk personel berwenang. Kelola kontraktor, perbarui log pekerjaan mingguan, dan awasi seluruh siklus hidup proyek dengan keamanan bertenaga Supabase.",
+            "staffBtnGo": "Buka Dasbor",
+            "staffBtnSign": "Masuk ke Portal"
+        },
+        "specs": {
+            "subtitle": "Di Balik Layar",
+            "title": "Infrastruktur Tingkat Perusahaan",
+            "s1Title": "Arsitektur Real-Time",
+            "s1Desc": "Ditenagai oleh Supabase dan React Query untuk pembaruan instan di semua perangkat. Tidak perlu memuat ulang.",
+            "s2Title": "Dibuat untuk Lapangan",
+            "s2Desc": "Desain responsif dan integrasi Supabase Storage memungkinkan inspektur mengunggah foto lokasi langsung dari browser seluler mereka.",
+            "s3Title": "Integritas Data",
+            "s3Desc": "Keamanan Tingkat Baris (RLS) mutakhir memastikan bahwa pengguna publik melihat semuanya, tetapi hanya staf terverifikasi yang dapat mengubah."
+        },
+        "cta": {
+            "title1": "Jalan Lebih Baik. Data Lebih Baik. ",
+            "title2": "Jambi Lebih Baik.",
+            "desc": "Transisikan departemen Anda ke era digital. SigiMarga menyederhanakan yang rumit sehingga Anda dapat fokus membangun kota yang lebih terhubung.",
+            "btn": "Mulai dengan SigiMarga"
+        }
+    },
+    "login": {
+        "title": "Login Staf",
+        "subtitle": "Masuk untuk mengelola proyek dan melacak kemajuan.",
+        "email": "Alamat Email",
+        "emailPh": "anda@contoh.com",
+        "password": "Kata Sandi",
+        "passwordPh": "••••••••",
+        "btn": "Masuk",
+        "back": "Kembali ke Beranda"
+    },
+    "dashboard": {
+        "publicTitle": "Dasbor Publik",
+        "publicSubtitle": "Lacak proyek infrastruktur di Kota Jambi",
+        "title": "Dasbor Proyek",
+        "subtitle": "Kelola dan lacak semua proyek infrastruktur",
+        "summary": "Ringkasan",
+        "totalProjects": "Total Proyek",
+        "activeProjects": "Proyek Aktif",
+        "completedProjects": "Proyek Selesai",
+        "avgProgress": "Rata-rata Kemajuan",
+        "totalValue": "Total Nilai",
+        "progressDist": "Distribusi Kemajuan",
+        "xAxis": "Kemajuan (%)",
+        "yAxis": "Jumlah Proyek",
+        "tooltip": "proyek",
+        "directory": "Direktori Proyek",
+        "search": "Cari proyek, kontraktor...",
+        "allDistricts": "Semua Kecamatan",
+        "allSubDistricts": "Semua Kelurahan",
+        "thProject": "Proyek",
+        "thContractor": "Kontraktor",
+        "thConsultant": "Konsultan",
+        "thDistrict": "Kecamatan",
+        "thSubDistrict": "Kelurahan",
+        "thAvgWidth": "Lebar Rata-rata",
+        "thLength": "Panjang",
+        "thHierarchy": "Hierarki",
+        "thProgress": "Kemajuan",
+        "thValue": "Nilai",
+        "thActions": "Aksi",
+        "btnView": "Detail",
+        "btnEdit": "Ubah",
+        "noProjects": "Tidak ada proyek yang sesuai kriteria",
+        "emptyValue": "-"
+    }
+}

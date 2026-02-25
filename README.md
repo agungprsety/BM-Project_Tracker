@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<img src="sigi_margafull.png.jpg" alt="SigiMarga Logo" width="400" />
+<img src="sigi_margafull_transparent.png" alt="SigiMarga Logo" width="400" />
 
 **Digital Intelligence for Urban Infrastructure**
 

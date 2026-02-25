@@ -5,8 +5,9 @@ import { useProjects } from '@/hooks/useProjects';
 import { exportAllProjectsSummary } from '@/lib/exportPdf';
 import { calculateProgress, formatCurrency, formatLength } from '@/lib/utils';
 import { DISTRICTS } from '@/data/districts';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from 'recharts';
 import { MapPin, FileDown, Search, ChevronLeft, ChevronRight, ArrowUpDown, Filter } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 
@@ -26,6 +27,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { darkMode } = useAppStore();
   const { data: projects = [], isLoading } = useProjects();
+  const { t } = useTranslation();
 
   // State
   const [search, setSearch] = useState('');
@@ -186,15 +188,15 @@ export default function Dashboard() {
       {/* Summary stat cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <Card darkMode={darkMode}>
-          <p className={`text-sm font-medium mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Total Projects</p>
+          <p className={`text-sm font-medium mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('dashboard.totalProjects')}</p>
           <p className="text-3xl font-bold">{projects.length}</p>
         </Card>
         <Card darkMode={darkMode}>
-          <p className={`text-sm font-medium mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Total Value</p>
+          <p className={`text-sm font-medium mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('dashboard.totalValue')}</p>
           <p className="text-2xl font-bold text-blue-600">{formatCurrency(totalValue)}</p>
         </Card>
         <Card darkMode={darkMode}>
-          <p className={`text-sm font-medium mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Avg Progress</p>
+          <p className={`text-sm font-medium mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('dashboard.avgProgress')}</p>
           <p className="text-2xl font-bold text-green-600">{avgProgress.toFixed(1)}%</p>
         </Card>
         <Card darkMode={darkMode}>
@@ -214,7 +216,7 @@ export default function Dashboard() {
           <Card darkMode={darkMode} className="mb-8">
             <div className="flex justify-between items-center mb-4">
               <div>
-                <h3 className="text-lg font-semibold">Progress Distribution</h3>
+                <h3 className="text-lg font-semibold">{t('dashboard.progressDist')}</h3>
                 <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                   Click a bar to filter the table below
                 </p>
@@ -228,17 +230,38 @@ export default function Dashboard() {
                 </button>
               )}
             </div>
-            <ResponsiveContainer width="100%" height={180}>
-              <BarChart data={distributionData} margin={{ left: 15, right: 10, top: 10, bottom: 20 }}>
-                <XAxis dataKey="label" tick={{ fontSize: 12 }} label={{ value: 'Progress (%)', position: 'insideBottom', offset: -15, fontSize: 12 }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 12 }} label={{ value: 'No. of Projects', angle: -90, position: 'insideLeft', offset: -5, fontSize: 12 }} />
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={distributionData} margin={{ left: -20, right: 10, top: 10, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={darkMode ? '#374151' : '#e5e7eb'} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 13, fill: darkMode ? '#9ca3af' : '#6b7280', fontWeight: 500 }}
+                  axisLine={false}
+                  tickLine={false}
+                  dy={10}
+                />
+                <YAxis
+                  allowDecimals={false}
+                  tick={{ fontSize: 13, fill: darkMode ? '#9ca3af' : '#6b7280', fontWeight: 500 }}
+                  axisLine={false}
+                  tickLine={false}
+                  dx={-10}
+                />
                 <Tooltip
-                  formatter={(value: number) => [`${value} projects`, 'Count']}
-                  contentStyle={darkMode ? { backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' } : { borderRadius: '8px' }}
+                  formatter={(value: number) => [value, t('dashboard.tooltip')]}
+                  cursor={{ fill: darkMode ? '#374151' : '#f3f4f6', opacity: 0.4 }}
+                  contentStyle={
+                    darkMode
+                      ? { backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.5)' }
+                      : { backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }
+                  }
+                  itemStyle={{ color: darkMode ? '#e5e7eb' : '#111827', fontWeight: 600 }}
+                  labelStyle={{ color: darkMode ? '#9ca3af' : '#6b7280', marginBottom: '4px', fontWeight: 500 }}
                 />
                 <Bar
                   dataKey="count"
-                  radius={[4, 4, 0, 0]}
+                  radius={[6, 6, 0, 0]}
+                  barSize={40}
                   cursor="pointer"
                   onClick={(data: any) => {
                     if (filterBucket === data.key) {
@@ -267,7 +290,7 @@ export default function Dashboard() {
               {/* Header row */}
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <h3 className="text-lg font-semibold">
-                  All Projects
+                  {t('dashboard.title')}
                   {filtered.length !== enriched.length && (
                     <span className={`text-sm font-normal ml-2 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                       ({filtered.length} of {enriched.length})
@@ -278,7 +301,7 @@ export default function Dashboard() {
                   <Search size={16} className={`absolute left-3 top-1/2 -translate-y-1/2 ${darkMode ? 'text-gray-500' : 'text-gray-400'}`} />
                   <input
                     type="text"
-                    placeholder="Search name, contractor, consultant..."
+                    placeholder={t('dashboard.search')}
                     value={search}
                     onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                     className={`w-full pl-9 pr-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-300 placeholder-gray-400'
@@ -295,7 +318,7 @@ export default function Dashboard() {
                   onChange={(e) => { setFilterDistrict(e.target.value); setFilterSubDistrict(''); setPage(1); }}
                   className={selectClass}
                 >
-                  <option value="">All Districts</option>
+                  <option value="">{t('dashboard.allDistricts')}</option>
                   {DISTRICTS.map((d) => (
                     <option key={d.code} value={d.name}>{d.name}</option>
                   ))}
@@ -306,7 +329,7 @@ export default function Dashboard() {
                   className={selectClass}
                   disabled={!filterDistrict}
                 >
-                  <option value="">All Sub-districts</option>
+                  <option value="">{t('dashboard.allSubDistricts')}</option>
                   {filterSubDistrictOptions.map((s) => (
                     <option key={s} value={s}>{s}</option>
                   ))}
@@ -327,16 +350,16 @@ export default function Dashboard() {
                 <thead>
                   <tr className={darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-50 text-gray-500'}>
                     {([
-                      ['name', 'Project'],
-                      ['contractor', 'Contractor'],
-                      ['supervisor', 'Consultant'],
-                      ['district', 'District'],
-                      ['subDistrict', 'Sub-district'],
-                      ['averageWidth', 'Avg Width'],
-                      ['length', 'Length'],
-                      ['roadHierarchy', 'Hierarchy'],
-                      ['progress', 'Progress'],
-                      ['value', 'Value'],
+                      ['name', t('dashboard.thProject')],
+                      ['contractor', t('dashboard.thContractor')],
+                      ['supervisor', t('dashboard.thConsultant')],
+                      ['district', t('dashboard.thDistrict')],
+                      ['subDistrict', t('dashboard.thSubDistrict')],
+                      ['averageWidth', t('dashboard.thAvgWidth')],
+                      ['length', t('dashboard.thLength')],
+                      ['roadHierarchy', t('dashboard.thHierarchy')],
+                      ['progress', t('dashboard.thProgress')],
+                      ['value', t('dashboard.thValue')]
                     ] as [SortKey, string][]).map(([key, label]) => (
                       <th
                         key={key}
@@ -349,14 +372,14 @@ export default function Dashboard() {
                         </span>
                       </th>
                     ))}
-                    <th className="px-3 py-3 text-left text-xs font-medium">Actions</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium">{t('dashboard.thActions')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {paged.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-4 py-8 text-center">
-                        <p className={darkMode ? 'text-gray-400' : 'text-gray-500'}>No projects match your filters.</p>
+                      <td colSpan={11} className="px-4 py-8 text-center">
+                        <p className={darkMode ? 'text-gray-400' : 'text-gray-500'}>{t('dashboard.noProjects')}</p>
                       </td>
                     </tr>
                   ) : (
@@ -388,7 +411,7 @@ export default function Dashboard() {
                         <td className="px-3 py-3 text-sm whitespace-nowrap">{formatCurrency(project._value)}</td>
                         <td className="px-3 py-3">
                           <Button size="sm" variant="secondary" onClick={() => navigate(`/projects/${project.id}`)}>
-                            View
+                            {t('dashboard.btnView')}
                           </Button>
                         </td>
                       </tr>

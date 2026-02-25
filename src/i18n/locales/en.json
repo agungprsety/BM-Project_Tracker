@@ -1,0 +1,102 @@
+{
+    "nav": {
+        "explore": "Explore",
+        "dashboard": "Dashboard",
+        "newProject": "New Project",
+        "signOut": "Sign Out",
+        "switchToLight": "Switch to Light Mode",
+        "switchToDark": "Switch to Dark Mode"
+    },
+    "landing": {
+        "badge": "Bina Marga Kota Jambi",
+        "title1": "Digital Intelligence for ",
+        "title2": "Urban Infrastructure",
+        "subtitle": "SigiMarga is the professional monitoring ecosystem for Bina Marga Kota Jambi. Trace every kilometer of progress with real-time geospatial tracking, automated S-Curves, and audit-ready documentation.",
+        "btnStaff": "Launch Staff Dashboard",
+        "btnExplore": "Explore Public Projects",
+        "features": {
+            "subtitle": "Purpose-Built for Engineers",
+            "title": "Features That Save Hours, Not Minutes",
+            "f1Title": "Automated Engineering Analytics",
+            "f1Desc": "Stop fighting with Excel formulas. Upload your Bill of Quantities (BoQ) and let SigiMarga generate real-time S-Curves and financial absorption charts automatically.",
+            "f2Title": "Geospatial Command Center",
+            "f2Desc": "Visualize your city's growth. Our integrated Leaflet GIS allows you to pin projects, monitor regional distribution, and verify site conditions with GPS-tagged photo evidence.",
+            "f3Title": "One-Click Audit Reports",
+            "f3Desc": "Go from data to document in seconds. Export professional, branded PDF summaries for portfolio reviews or detailed individual project reports—formatted and ready for stakeholders."
+        },
+        "dual": {
+            "subtitle": "Dual-Engine Architecture",
+            "title": "Transparency Meets Security",
+            "pubBadge": "Public Explore",
+            "pubTitle": "Radical Transparency",
+            "pubDesc": "Give the citizens of Kota Jambi a front-row seat to progress. A read-only dashboard allowing anyone to track road improvements, view site photos, and see where their tax Rupiahs are at work. No login, no friction.",
+            "pubBtn": "Browse Public Dashboard",
+            "staffBadge": "Staff Portal",
+            "staffTitle": "Secure Field Management",
+            "staffDesc": "A high-performance workspace for authorized personnel. Manage contractors, update weekly work logs, and oversee the entire project lifecycle with Supabase-powered security and real-time data syncing.",
+            "staffBtnGo": "Go to Dashboard",
+            "staffBtnSign": "Sign In to Portal"
+        },
+        "specs": {
+            "subtitle": "Under the Hood",
+            "title": "Enterprise-Grade Infrastructure",
+            "s1Title": "Real-Time Architecture",
+            "s1Desc": "Powered by Supabase and React Query for instant updates across all devices. No refresh needed.",
+            "s2Title": "Built for the Field",
+            "s2Desc": "Responsive design and Supabase Storage integration allow inspectors to upload site photos directly from their mobile browsers.",
+            "s3Title": "Data Integrity",
+            "s3Desc": "State-of-the-art Row Level Security (RLS) ensures that public users see everything, but only verified staff can change anything."
+        },
+        "cta": {
+            "title1": "Better Roads. Better Data. ",
+            "title2": "Better Jambi.",
+            "desc": "Transition your department into the digital age. SigiMarga simplifies the complex so you can focus on building a more connected city.",
+            "btn": "Get Started with SigiMarga"
+        }
+    },
+    "login": {
+        "title": "Staff Login",
+        "subtitle": "Sign in to manage projects and track progress.",
+        "email": "Email Address",
+        "emailPh": "you@example.com",
+        "password": "Password",
+        "passwordPh": "••••••••",
+        "btn": "Sign In",
+        "back": "Back to Home"
+    },
+    "dashboard": {
+        "publicTitle": "Public Dashboard",
+        "publicSubtitle": "Track infrastructure projects across Kota Jambi",
+        "title": "Project Dashboard",
+        "subtitle": "Manage and track all infrastructure projects",
+        "summary": "Summary",
+        "totalProjects": "Total Projects",
+        "activeProjects": "Active Projects",
+        "completedProjects": "Completed Projects",
+        "avgProgress": "Average Progress",
+        "totalValue": "Total Value",
+        "progressDist": "Progress Distribution",
+        "xAxis": "Progress (%)",
+        "yAxis": "No. of Projects",
+        "tooltip": "projects",
+        "directory": "Project Directory",
+        "search": "Search projects, contractors...",
+        "allDistricts": "All Districts",
+        "allSubDistricts": "All Sub-districts",
+        "thProject": "Project",
+        "thContractor": "Contractor",
+        "thConsultant": "Consultant",
+        "thDistrict": "District",
+        "thSubDistrict": "Sub-district",
+        "thAvgWidth": "Avg Width",
+        "thLength": "Length",
+        "thHierarchy": "Hierarchy",
+        "thProgress": "Progress",
+        "thValue": "Value",
+        "thActions": "Actions",
+        "btnView": "View Details",
+        "btnEdit": "Edit",
+        "noProjects": "No projects found matching your criteria",
+        "emptyValue": "-"
+    }
+}

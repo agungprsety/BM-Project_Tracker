@@ -13,11 +13,13 @@ import {
     Lock,
     ChevronRight,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 export default function Landing() {
     const navigate = useNavigate();
     const { darkMode } = useAppStore();
     const { user } = useAuth();
+    const { t } = useTranslation();
 
     const dm = darkMode;
 
@@ -35,9 +37,9 @@ export default function Landing() {
                 <div className="relative max-w-5xl mx-auto text-center py-24 md:py-36 px-4">
                     {/* Logo */}
                     <img
-                        src="/sigi_margafull.png.jpg"
+                        src="/sigi_margafull_transparent.png"
                         alt="SigiMarga"
-                        className="h-20 md:h-28 w-auto mx-auto mb-8 drop-shadow-lg"
+                        className={`h-20 md:h-28 w-auto mx-auto mb-8 drop-shadow-lg transition-all ${dm ? 'brightness-0 invert' : ''}`}
                     />
 
                     {/* Badge */}
@@ -46,18 +48,18 @@ export default function Landing() {
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75" />
                             <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600" />
                         </span>
-                        Bina Marga Kota Jambi
+                        {t('landing.badge')}
                     </div>
 
                     <h1 className={`text-4xl sm:text-5xl md:text-7xl font-black tracking-tight leading-[1.1] mb-6 ${dm ? 'text-white' : 'text-gray-900'}`}>
-                        Digital Intelligence for{' '}
+                        {t('landing.title1')}
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-indigo-500 to-purple-600">
-                            Urban Infrastructure
+                            {t('landing.title2')}
                         </span>
                     </h1>
 
                     <p className={`text-base sm:text-lg md:text-xl max-w-3xl mx-auto mb-10 leading-relaxed ${dm ? 'text-gray-400' : 'text-gray-600'}`}>
-                        SigiMarga is the professional monitoring ecosystem for Bina Marga Kota Jambi. Trace every kilometer of progress with real-time geospatial tracking, automated S-Curves, and audit-ready documentation.
+                        {t('landing.subtitle')}
                     </p>
 
                     <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -65,14 +67,14 @@ export default function Landing() {
                             onClick={() => navigate(user ? '/dashboard' : '/login')}
                             className="group relative inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-lg rounded-xl shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30 hover:-translate-y-0.5 transition-all duration-200"
                         >
-                            Launch Staff Dashboard
+                            {t('landing.btnStaff')}
                             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                         </button>
                         <button
                             onClick={() => navigate('/explore')}
                             className={`group inline-flex items-center gap-2 px-8 py-4 font-semibold text-lg rounded-xl border-2 transition-all duration-200 hover:-translate-y-0.5 ${dm ? 'border-gray-600 text-gray-300 hover:border-gray-500 hover:bg-gray-800/50' : 'border-gray-300 text-gray-700 hover:border-gray-400 hover:bg-gray-50'}`}
                         >
-                            Explore Public Projects
+                            {t('landing.btnExplore')}
                             <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                         </button>
                     </div>
@@ -84,10 +86,10 @@ export default function Landing() {
                 <div className="max-w-6xl mx-auto px-4">
                     <div className="text-center mb-16">
                         <p className={`text-sm font-semibold tracking-widest uppercase mb-3 ${dm ? 'text-blue-400' : 'text-blue-600'}`}>
-                            Purpose-Built for Engineers
+                            {t('landing.features.subtitle')}
                         </p>
                         <h2 className={`text-3xl md:text-4xl font-extrabold tracking-tight ${dm ? 'text-white' : 'text-gray-900'}`}>
-                            Features That Save Hours, Not Minutes
+                            {t('landing.features.title')}
                         </h2>
                     </div>
 
@@ -98,10 +100,10 @@ export default function Landing() {
                                 <BarChart3 className="w-7 h-7" />
                             </div>
                             <h3 className={`text-xl font-bold mb-3 ${dm ? 'text-white' : 'text-gray-900'}`}>
-                                Automated Engineering Analytics
+                                {t('landing.features.f1Title')}
                             </h3>
                             <p className={`leading-relaxed ${dm ? 'text-gray-400' : 'text-gray-600'}`}>
-                                Stop fighting with Excel formulas. Upload your Bill of Quantities (BoQ) and let SigiMarga generate real-time S-Curves and financial absorption charts automatically.
+                                {t('landing.features.f1Desc')}
                             </p>
                         </div>
 
@@ -111,10 +113,10 @@ export default function Landing() {
                                 <Map className="w-7 h-7" />
                             </div>
                             <h3 className={`text-xl font-bold mb-3 ${dm ? 'text-white' : 'text-gray-900'}`}>
-                                Geospatial Command Center
+                                {t('landing.features.f2Title')}
                             </h3>
                             <p className={`leading-relaxed ${dm ? 'text-gray-400' : 'text-gray-600'}`}>
-                                Visualize your city's growth. Our integrated Leaflet GIS allows you to pin projects, monitor regional distribution, and verify site conditions with GPS-tagged photo evidence.
+                                {t('landing.features.f2Desc')}
                             </p>
                         </div>
 
@@ -124,10 +126,10 @@ export default function Landing() {
                                 <FileText className="w-7 h-7" />
                             </div>
                             <h3 className={`text-xl font-bold mb-3 ${dm ? 'text-white' : 'text-gray-900'}`}>
-                                One-Click Audit Reports
+                                {t('landing.features.f3Title')}
                             </h3>
                             <p className={`leading-relaxed ${dm ? 'text-gray-400' : 'text-gray-600'}`}>
-                                Go from data to document in seconds. Export professional, branded PDF summaries for portfolio reviews or detailed individual project reports—formatted and ready for stakeholders.
+                                {t('landing.features.f3Desc')}
                             </p>
                         </div>
                     </div>
@@ -139,10 +141,10 @@ export default function Landing() {
                 <div className="max-w-6xl mx-auto px-4">
                     <div className="text-center mb-16">
                         <p className={`text-sm font-semibold tracking-widest uppercase mb-3 ${dm ? 'text-indigo-400' : 'text-indigo-600'}`}>
-                            Dual-Engine Architecture
+                            {t('landing.dual.subtitle')}
                         </p>
                         <h2 className={`text-3xl md:text-4xl font-extrabold tracking-tight ${dm ? 'text-white' : 'text-gray-900'}`}>
-                            Transparency Meets Security
+                            {t('landing.dual.title')}
                         </h2>
                     </div>
 
@@ -154,19 +156,19 @@ export default function Landing() {
                             </div>
                             <div className="relative">
                                 <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-6 ${dm ? 'bg-emerald-900/60 text-emerald-300' : 'bg-emerald-100 text-emerald-700'}`}>
-                                    <Globe className="w-3 h-3" /> Public Explore
+                                    <Globe className="w-3 h-3" /> {t('landing.dual.pubBadge')}
                                 </div>
                                 <h3 className={`text-2xl font-extrabold mb-4 ${dm ? 'text-white' : 'text-gray-900'}`}>
-                                    Radical Transparency
+                                    {t('landing.dual.pubTitle')}
                                 </h3>
                                 <p className={`leading-relaxed text-base ${dm ? 'text-gray-400' : 'text-gray-600'}`}>
-                                    Give the citizens of Kota Jambi a front-row seat to progress. A read-only dashboard allowing anyone to track road improvements, view site photos, and see where their tax Rupiahs are at work. No login, no friction.
+                                    {t('landing.dual.pubDesc')}
                                 </p>
                                 <button
                                     onClick={() => navigate('/explore')}
                                     className={`mt-6 inline-flex items-center gap-2 font-semibold transition-colors ${dm ? 'text-emerald-400 hover:text-emerald-300' : 'text-emerald-600 hover:text-emerald-700'}`}
                                 >
-                                    Browse Public Dashboard <ArrowRight className="w-4 h-4" />
+                                    {t('landing.dual.pubBtn')} <ArrowRight className="w-4 h-4" />
                                 </button>
                             </div>
                         </div>
@@ -178,19 +180,19 @@ export default function Landing() {
                             </div>
                             <div className="relative">
                                 <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-6 ${dm ? 'bg-blue-900/60 text-blue-300' : 'bg-blue-100 text-blue-700'}`}>
-                                    <ShieldCheck className="w-3 h-3" /> Staff Portal
+                                    <ShieldCheck className="w-3 h-3" /> {t('landing.dual.staffBadge')}
                                 </div>
                                 <h3 className={`text-2xl font-extrabold mb-4 ${dm ? 'text-white' : 'text-gray-900'}`}>
-                                    Secure Field Management
+                                    {t('landing.dual.staffTitle')}
                                 </h3>
                                 <p className={`leading-relaxed text-base ${dm ? 'text-gray-400' : 'text-gray-600'}`}>
-                                    A high-performance workspace for authorized personnel. Manage contractors, update weekly work logs, and oversee the entire project lifecycle with Supabase-powered security and real-time data syncing.
+                                    {t('landing.dual.staffDesc')}
                                 </p>
                                 <button
                                     onClick={() => navigate(user ? '/dashboard' : '/login')}
                                     className={`mt-6 inline-flex items-center gap-2 font-semibold transition-colors ${dm ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`}
                                 >
-                                    {user ? 'Go to Dashboard' : 'Sign In to Portal'} <ArrowRight className="w-4 h-4" />
+                                    {user ? t('landing.dual.staffBtnGo') : t('landing.dual.staffBtnSign')} <ArrowRight className="w-4 h-4" />
                                 </button>
                             </div>
                         </div>
@@ -203,10 +205,10 @@ export default function Landing() {
                 <div className="max-w-6xl mx-auto px-4">
                     <div className="text-center mb-16">
                         <p className={`text-sm font-semibold tracking-widest uppercase mb-3 ${dm ? 'text-gray-400' : 'text-gray-500'}`}>
-                            Under the Hood
+                            {t('landing.specs.subtitle')}
                         </p>
                         <h2 className={`text-3xl md:text-4xl font-extrabold tracking-tight ${dm ? 'text-white' : 'text-gray-900'}`}>
-                            Enterprise-Grade Infrastructure
+                            {t('landing.specs.title')}
                         </h2>
                     </div>
 
@@ -216,10 +218,10 @@ export default function Landing() {
                                 <Zap className="w-8 h-8" />
                             </div>
                             <h3 className={`text-lg font-bold mb-2 ${dm ? 'text-white' : 'text-gray-900'}`}>
-                                Real-Time Architecture
+                                {t('landing.specs.s1Title')}
                             </h3>
                             <p className={`text-sm leading-relaxed ${dm ? 'text-gray-400' : 'text-gray-600'}`}>
-                                Powered by Supabase and React Query for instant updates across all devices. No refresh needed.
+                                {t('landing.specs.s1Desc')}
                             </p>
                         </div>
 
@@ -228,10 +230,10 @@ export default function Landing() {
                                 <Smartphone className="w-8 h-8" />
                             </div>
                             <h3 className={`text-lg font-bold mb-2 ${dm ? 'text-white' : 'text-gray-900'}`}>
-                                Built for the Field
+                                {t('landing.specs.s2Title')}
                             </h3>
                             <p className={`text-sm leading-relaxed ${dm ? 'text-gray-400' : 'text-gray-600'}`}>
-                                Responsive design and Supabase Storage integration allow inspectors to upload site photos directly from their mobile browsers.
+                                {t('landing.specs.s2Desc')}
                             </p>
                         </div>
 
@@ -240,10 +242,10 @@ export default function Landing() {
                                 <Lock className="w-8 h-8" />
                             </div>
                             <h3 className={`text-lg font-bold mb-2 ${dm ? 'text-white' : 'text-gray-900'}`}>
-                                Data Integrity
+                                {t('landing.specs.s3Title')}
                             </h3>
                             <p className={`text-sm leading-relaxed ${dm ? 'text-gray-400' : 'text-gray-600'}`}>
-                                State-of-the-art Row Level Security (RLS) ensures that public users see everything, but only verified staff can change anything.
+                                {t('landing.specs.s3Desc')}
                             </p>
                         </div>
                     </div>
@@ -257,19 +259,19 @@ export default function Landing() {
                 </div>
                 <div className="relative max-w-3xl mx-auto text-center px-4">
                     <h2 className={`text-3xl md:text-5xl font-black tracking-tight leading-tight mb-6 ${dm ? 'text-white' : 'text-gray-900'}`}>
-                        Better Roads. Better Data.{' '}
+                        {t('landing.cta.title1')}
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">
-                            Better Jambi.
+                            {t('landing.cta.title2')}
                         </span>
                     </h2>
                     <p className={`text-lg md:text-xl mb-10 leading-relaxed ${dm ? 'text-gray-400' : 'text-gray-600'}`}>
-                        Transition your department into the digital age. SigiMarga simplifies the complex so you can focus on building a more connected city.
+                        {t('landing.cta.desc')}
                     </p>
                     <button
                         onClick={() => navigate(user ? '/dashboard' : '/login')}
                         className="group inline-flex items-center gap-2 px-10 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-lg rounded-xl shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30 hover:-translate-y-0.5 transition-all duration-200"
                     >
-                        Get Started with SigiMarga
+                        {t('landing.cta.btn')}
                         <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                     </button>
                 </div>

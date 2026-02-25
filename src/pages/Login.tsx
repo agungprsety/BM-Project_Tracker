@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppStore } from '@/store';
+import { useTranslation } from 'react-i18next';
 import { LogIn, AlertCircle } from 'lucide-react';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
@@ -15,6 +16,7 @@ export default function Login() {
     const { signIn } = useAuth();
     const navigate = useNavigate();
     const { darkMode } = useAppStore();
+    const { t } = useTranslation();
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -35,10 +37,10 @@ export default function Login() {
         <div className="flex items-center justify-center min-h-[80vh] px-4">
             <Card darkMode={darkMode} className="w-full max-w-md p-8 md:p-10 shadow-2xl">
                 <div className="text-center mb-8">
-                    <img src="/sigi_margafull.png.jpg" alt="SigiMarga" className="h-16 w-auto mx-auto mb-4" />
-                    <h1 className="text-2xl font-bold mb-2">Staff Login</h1>
+                    <img src="/sigi_margafull_transparent.png" alt="SigiMarga" className={`h-16 w-auto mx-auto mb-4 transition-all ${darkMode ? 'brightness-0 invert' : ''}`} />
+                    <h1 className="text-2xl font-bold mb-2">{t('login.title')}</h1>
                     <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                        Sign in to manage projects and track progress.
+                        {t('login.subtitle')}
                     </p>
                 </div>
 
@@ -52,11 +54,11 @@ export default function Login() {
 
                     <div>
                         <label className={`block text-sm font-medium mb-1.5 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                            Email Address
+                            {t('login.email')}
                         </label>
                         <Input
                             type="email"
-                            placeholder="you@example.com"
+                            placeholder={t('login.emailPh')}
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             required
@@ -66,11 +68,11 @@ export default function Login() {
 
                     <div>
                         <label className={`block text-sm font-medium mb-1.5 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                            Password
+                            {t('login.password')}
                         </label>
                         <Input
                             type="password"
-                            placeholder="••••••••"
+                            placeholder={t('login.passwordPh')}
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             required
@@ -84,7 +86,7 @@ export default function Login() {
                         isLoading={isLoading}
                         disabled={isLoading}
                     >
-                        Sign In
+                        {t('login.btn')}
                     </Button>
                 </form>
 
@@ -93,7 +95,7 @@ export default function Login() {
                         onClick={() => navigate('/')}
                         className={`text-sm ${darkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'} transition-colors`}
                     >
-                        &larr; Back to Home
+                        &larr; {t('login.back')}
                     </button>
                 </div>
             </Card>
