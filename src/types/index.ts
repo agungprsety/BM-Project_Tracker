@@ -17,6 +17,7 @@ export interface Project {
   boq: BoQItem[];
   weeklyReports: WeeklyReport[];
   photos: Photo[];
+  createdBy?: string;
   createdAt: string;
   updatedAt: string;
 }

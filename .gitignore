@@ -10,6 +10,8 @@
 
 # production
 /build
+/dist
+/dist-node
 
 # misc
 .DS_Store
@@ -21,3 +23,20 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Helper scripts (not part of the app)
+remove_bg.js
+remove_bg.py
+
+# Raw image assets (not needed in repo)
+sigi_margafull.png.jpg
+sigi_s.png
+
+# Redundant migration (contents in supabase_schema_secure.sql)
+phase2_storage_migration.sql
+
+# Agent data
+.gemini/

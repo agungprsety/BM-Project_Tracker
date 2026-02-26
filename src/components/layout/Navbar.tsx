@@ -33,7 +33,7 @@ export default function Navbar() {
     <nav className={`p-4 mb-6 shadow-lg ${darkMode ? 'bg-gradient-to-r from-gray-800 to-gray-900 text-white' : 'bg-gradient-to-r from-blue-700 to-blue-800 text-white'}`}>
       <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
         <Link to={user ? '/dashboard' : '/'} className="flex items-center gap-2 hover:opacity-90 transition-opacity">
-          <img src="/sigi_s_transparent.png" alt="SigiMarga" className="h-9 w-auto brightness-0 invert" />
+          <img src="/logo_small.png" alt="SigiMarga" className="h-9 w-auto brightness-0 invert" />
         </Link>
         <div className="flex flex-wrap gap-2 justify-center">
           <Link

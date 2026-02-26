@@ -1,11 +1,20 @@
 import { supabase } from './supabase';
+import { keysToCamel } from './caseMapper';
 import type { Project, BoQItem, WeeklyReport, ItemProgress, Photo } from '@/types';
 
 // ── Mapping Utilities ────────────────────────────────────────────────────────
 
-// Map a Database row to our UI `Project` interface
+/**
+ * Maps a Supabase DB row (snake_case, flat + nested relations)
+ * into the UI `Project` interface (camelCase, structured).
+ *
+ * Note: We still use explicit mapping here rather than the generic `keysToCamel`
+ * because the DB schema has structural differences from the UI model
+ * (e.g., `location_lat`/`location_lng` → `location: [lat, lng]`,
+ *  `contract_price` as numeric → `contractPrice` as string,
+ *  photos split between project-level and report-level).
+ */
 function mapProjectFromDb(row: any): Project {
-  // Map boq_items
   const boq: BoQItem[] = (row.boq_items || []).map((item: any) => ({
     id: item.id,
     itemNumber: item.item_number,
@@ -15,14 +24,12 @@ function mapProjectFromDb(row: any): Project {
     unitPrice: Number(item.unit_price),
   }));
 
-  // Map weekly_reports and nested item_progress
   const weeklyReports: WeeklyReport[] = (row.weekly_reports || []).map((report: any) => {
     const itemProgress: ItemProgress[] = (report.item_progress || []).map((ip: any) => ({
       boqItemId: ip.boq_item_id,
       quantity: Number(ip.quantity),
     }));
 
-    // Photos specific to this weekly report
     const reportPhotos = (row.photos || [])
       .filter((p: any) => p.weekly_report_id === report.id)
       .map((p: any) => ({
@@ -44,7 +51,6 @@ function mapProjectFromDb(row: any): Project {
     };
   });
 
-  // Photos attached directly to the project (not a specific weekly report)
   const projectPhotos: Photo[] = (row.photos || [])
     .filter((p: any) => !p.weekly_report_id)
     .map((p: any) => ({
@@ -73,41 +79,10 @@ function mapProjectFromDb(row: any): Project {
     boq,
     weeklyReports,
     photos: projectPhotos,
+    createdBy: row.created_by || undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
-}
-
-// Map a UI `Project` interface to a Database row (excluding relations)
-function mapProjectToDb(project: Partial<Project>) {
-  const data: any = {};
-  if (project.id !== undefined) data.id = project.id;
-  if (project.name !== undefined) data.name = project.name;
-  if (project.contractor !== undefined) data.contractor = project.contractor;
-  if (project.supervisor !== undefined) data.supervisor = project.supervisor;
-  if (project.contractPrice !== undefined) data.contract_price = Number(project.contractPrice) || 0;
-  if (project.workType !== undefined) data.work_type = project.workType;
-  if (project.roadHierarchy !== undefined) data.road_hierarchy = project.roadHierarchy;
-  if (project.maintenanceType !== undefined) data.maintenance_type = project.maintenanceType;
-  if (project.startDate !== undefined) data.start_date = project.startDate;
-  if (project.endDate !== undefined) data.end_date = project.endDate;
-  if (project.length !== undefined) data.length = project.length;
-  if (project.averageWidth !== undefined) data.average_width = project.averageWidth;
-
-  if (project.location !== undefined) {
-    if (project.location) {
-      data.location_lat = project.location[0];
-      data.location_lng = project.location[1];
-    } else {
-      data.location_lat = null;
-      data.location_lng = null;
-    }
-  }
-
-  if (project.district !== undefined) data.district = project.district;
-  if (project.subDistrict !== undefined) data.sub_district = project.subDistrict;
-
-  return data;
 }
 
 // ── Project Service ──────────────────────────────────────────────────────────
@@ -123,6 +98,7 @@ const SELECT_QUERY = `
 `;
 
 export const projectService = {
+  /** Upload a photo to Supabase Storage under the project's folder. */
   async uploadPhoto(file: File, projectId: string): Promise<string> {
     const fileExt = file.name.split('.').pop();
     const fileName = `${projectId}/${crypto.randomUUID()}.${fileExt}`;
@@ -139,6 +115,8 @@ export const projectService = {
 
     return data.publicUrl;
   },
+
+  /** Fetch all projects with their relations (BoQ, reports, photos). */
   async getAll(): Promise<Project[]> {
     const { data, error } = await supabase
       .from('projects')
@@ -149,6 +127,7 @@ export const projectService = {
     return (data || []).map(mapProjectFromDb);
   },
 
+  /** Fetch a single project by ID, or undefined if not found. */
   async getById(id: string): Promise<Project | undefined> {
     const { data, error } = await supabase
       .from('projects')
@@ -157,61 +136,33 @@ export const projectService = {
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') return undefined; // missing row
+      if (error.code === 'PGRST116') return undefined;
       throw error;
     }
     return data ? mapProjectFromDb(data) : undefined;
   },
 
+  /** Create a new project atomically via Postgres RPC. */
   async create(project: Project): Promise<string> {
-    // 1. Insert Project
-    const projectRow = mapProjectToDb(project);
-    const { error: projectError } = await supabase
-      .from('projects')
-      .insert([projectRow]);
-
-    if (projectError) throw projectError;
-
-    // 2. Insert all relations (BoQ, Weekly Reports, Photos)
-    await this._syncRelations(project.id, project.boq || [], project.weeklyReports || [], project.photos || []);
-
+    await this._callSyncRpc(project);
     return project.id;
   },
 
+  /** Update a project atomically via Postgres RPC. Merges partial updates with current state. */
   async update(id: string, updates: Partial<Project>): Promise<number> {
-    // 1. Update Project Scalar Fields
-    const projectUpdates = mapProjectToDb(updates);
+    const current = await this.getById(id);
+    if (!current) throw new Error('Project not found during update');
 
-    // Only perform the update query if there are fields to update (excluding relations like boq or weeklyReports)
-    if (Object.keys(projectUpdates).length > 0) {
-      const { error: updateError } = await supabase
-        .from('projects')
-        .update(projectUpdates)
-        .eq('id', id);
+    const merged: Project = { ...current, ...updates };
+    merged.boq = updates.boq !== undefined ? updates.boq : current.boq;
+    merged.weeklyReports = updates.weeklyReports !== undefined ? updates.weeklyReports : current.weeklyReports;
+    merged.photos = updates.photos !== undefined ? updates.photos : current.photos;
 
-      if (updateError) throw updateError;
-    }
-
-    // 2. Re-sync Relations if provided
-    if (updates.boq || updates.weeklyReports || updates.photos) {
-      // Because updates are partial, we only have what changed. 
-      // The easiest NoSQL-like behavior is to completely overwrite relations if they are present in the `updates` object.
-      // But we must be careful: if `updates` has `weeklyReports` but no `boq`, we need to make sure we don't break things.
-
-      // Let's fetch the current state first to have full arrays
-      const current = await this.getById(id);
-      if (!current) throw new Error("Project not found during update");
-
-      const boqToSync = updates.boq !== undefined ? updates.boq : current.boq;
-      const reportsToSync = updates.weeklyReports !== undefined ? updates.weeklyReports : current.weeklyReports;
-      const photosToSync = updates.photos !== undefined ? updates.photos : current.photos;
-
-      await this._syncRelations(id, boqToSync, reportsToSync, photosToSync);
-    }
-
+    await this._callSyncRpc(merged);
     return 1;
   },
 
+  /** Delete a project and all its relations (via CASCADE). */
   async delete(id: string): Promise<void> {
     const { error } = await supabase
       .from('projects')
@@ -220,6 +171,7 @@ export const projectService = {
     if (error) throw error;
   },
 
+  /** Search projects by name or contractor. */
   async search(query: string): Promise<Project[]> {
     const { data, error } = await supabase
       .from('projects')
@@ -231,109 +183,85 @@ export const projectService = {
     return (data || []).map(mapProjectFromDb);
   },
 
-  // Helper to completely overwrite relational arrays (similar to NoSQL replacement)
-  async _syncRelations(projectId: string, boq: BoQItem[], weeklyReports: WeeklyReport[], photos: Photo[]) {
-    // To mimic the overwrite behavior of the UI:
-    // 1. Delete all existing relations for this project.
-    // Note: CASCADE constraints on Supabase mean if you delete BoQ or Weekly reports, child rows (like item_progress) die too,
-    // but deleting the project isn't happening.
-    // We explicitly clear them out prior to insert.
+  /**
+   * Calls the `sync_project_complete` Postgres RPC to atomically
+   * upsert a project and replace all relational data in one transaction.
+   */
+  async _callSyncRpc(project: Project) {
+    const p_project = {
+      id: project.id,
+      name: project.name,
+      contractor: project.contractor,
+      supervisor: project.supervisor,
+      contract_price: Number(project.contractPrice) || 0,
+      work_type: project.workType,
+      road_hierarchy: project.roadHierarchy,
+      maintenance_type: project.maintenanceType,
+      start_date: project.startDate,
+      end_date: project.endDate,
+      length: project.length || 0,
+      average_width: project.averageWidth || 0,
+      location_lat: project.location ? project.location[0] : null,
+      location_lng: project.location ? project.location[1] : null,
+      district: project.district || '',
+      sub_district: project.subDistrict || '',
+    };
 
-    const { error: delBoqErr } = await supabase.from('boq_items').delete().eq('project_id', projectId);
-    if (delBoqErr) throw delBoqErr;
+    const p_boq_items = (project.boq || []).map(b => ({
+      id: b.id,
+      item_number: b.itemNumber,
+      description: b.description,
+      unit: b.unit,
+      quantity: b.quantity,
+      unit_price: b.unitPrice,
+    }));
 
-    const { error: delWrErr } = await supabase.from('weekly_reports').delete().eq('project_id', projectId);
-    if (delWrErr) throw delWrErr;
+    const p_weekly_reports = (project.weeklyReports || []).map(wr => ({
+      id: wr.id,
+      week_number: wr.weekNumber,
+      start_date: wr.startDate,
+      end_date: wr.endDate,
+      work_description: wr.workDescription,
+      created_at: wr.createdAt || new Date().toISOString(),
+      item_progress: (wr.itemProgress || []).map(ip => ({
+        boq_item_id: ip.boqItemId,
+        quantity: ip.quantity,
+      })),
+    }));
 
-    const { error: delPhotoErr } = await supabase.from('photos').delete().eq('project_id', projectId);
-    if (delPhotoErr) throw delPhotoErr;
+    let p_photos: any[] = [];
 
-    // Now insert the fresh state
-    // --- BOQ ---
-    if (boq.length > 0) {
-      const boqRows = boq.map(b => ({
-        id: b.id,
-        project_id: projectId,
-        item_number: b.itemNumber,
-        description: b.description,
-        unit: b.unit,
-        quantity: b.quantity,
-        unit_price: b.unitPrice
-      }));
-      const { error } = await supabase.from('boq_items').insert(boqRows);
-      if (error) throw error;
-    }
-
-    // --- Weekly Reports & item_progress ---
-    if (weeklyReports.length > 0) {
-      const wrRows = weeklyReports.map(wr => ({
-        id: wr.id,
-        project_id: projectId,
-        week_number: wr.weekNumber,
-        start_date: wr.startDate,
-        end_date: wr.endDate,
-        work_description: wr.workDescription,
-        created_at: wr.createdAt || new Date().toISOString()
-      }));
-      const { error: wrError } = await supabase.from('weekly_reports').insert(wrRows);
-      if (wrError) throw wrError;
-
-      // Flatten item_progress across all reports
-      const ipRows: any[] = [];
-      weeklyReports.forEach(wr => {
-        if (wr.itemProgress && wr.itemProgress.length > 0) {
-          wr.itemProgress.forEach(ip => {
-            ipRows.push({
-              weekly_report_id: wr.id,
-              boq_item_id: ip.boqItemId,
-              quantity: ip.quantity
-            });
-          });
-        }
-      });
-
-      if (ipRows.length > 0) {
-        const { error: ipError } = await supabase.from('item_progress').insert(ipRows);
-        if (ipError) throw ipError;
-      }
-    }
-
-    // --- Photos ---
-    // Distinguish between project photos and weekly report photos (UI maps all project photos to top level, but some are tied to reports)
-    // Actually in UI `project.photos` are project-wide gallery. Weekly reports have their own embedded `photos` array.
-    // Wait, is there a `wr.photos`? Yes, `WeeklyReport` interface has `photos: Photo[]`.
-    // Let's gather them all.
-
-    let allPhotosRows: any[] = [];
-
-    // Project level photos
-    if (photos.length > 0) {
-      allPhotosRows = allPhotosRows.concat(photos.map(p => ({
+    if (project.photos && project.photos.length > 0) {
+      p_photos = p_photos.concat(project.photos.map(p => ({
         id: p.id,
-        project_id: projectId,
+        project_id: project.id,
+        weekly_report_id: null,
         url: p.url,
-        caption: p.caption,
-        created_at: p.createdAt || new Date().toISOString()
+        caption: p.caption || null,
+        created_at: p.createdAt || new Date().toISOString(),
       })));
     }
 
-    // Weekly report photos
-    weeklyReports.forEach(wr => {
+    (project.weeklyReports || []).forEach(wr => {
       if (wr.photos && wr.photos.length > 0) {
-        allPhotosRows = allPhotosRows.concat(wr.photos.map(p => ({
+        p_photos = p_photos.concat(wr.photos.map(p => ({
           id: p.id,
-          weekly_report_id: wr.id,  // No project_id needed due to CHECK constraint allowing one OR other, but we can set both or just wr_id.
-          project_id: projectId,    // Best to set both if we want to cascade on project delete easily!
+          project_id: project.id,
+          weekly_report_id: wr.id,
           url: p.url,
-          caption: p.caption,
-          created_at: p.createdAt || new Date().toISOString()
+          caption: p.caption || null,
+          created_at: p.createdAt || new Date().toISOString(),
         })));
       }
     });
 
-    if (allPhotosRows.length > 0) {
-      const { error: pError } = await supabase.from('photos').insert(allPhotosRows);
-      if (pError) throw pError;
-    }
-  }
+    const { error } = await supabase.rpc('sync_project_complete', {
+      p_project,
+      p_boq_items,
+      p_weekly_reports,
+      p_photos,
+    });
+
+    if (error) throw error;
+  },
 };

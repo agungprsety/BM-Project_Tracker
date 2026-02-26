@@ -37,7 +37,14 @@ export default function Login() {
         <div className="flex items-center justify-center min-h-[80vh] px-4">
             <Card darkMode={darkMode} className="w-full max-w-md p-8 md:p-10 shadow-2xl">
                 <div className="text-center mb-8">
-                    <img src="/sigi_margafull_transparent.png" alt="SigiMarga" className={`h-16 w-auto mx-auto mb-4 transition-all ${darkMode ? 'brightness-0 invert' : ''}`} />
+                    {/* Responsive logo */}
+                    <div className="flex justify-center mb-6">
+                        <img
+                            src="/full_logo.png"
+                            alt="SigiMarga"
+                            className={`h-16 md:h-20 w-auto transition-all ${darkMode ? 'brightness-0 invert' : ''}`}
+                        />
+                    </div>
                     <h1 className="text-2xl font-bold mb-2">{t('login.title')}</h1>
                     <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                         {t('login.subtitle')}
