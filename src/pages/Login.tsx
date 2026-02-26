@@ -42,7 +42,7 @@ export default function Login() {
                         <img
                             src="/full_logo.png"
                             alt="SigiMarga"
-                            className={`h-16 md:h-20 w-auto transition-all ${darkMode ? 'brightness-0 invert' : ''}`}
+                            className="h-16 md:h-20 w-auto transition-all"
                         />
                     </div>
                     <h1 className="text-2xl font-bold mb-2">{t('login.title')}</h1>

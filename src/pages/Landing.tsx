@@ -39,7 +39,7 @@ export default function Landing() {
                     <img
                         src="/full_logo.png"
                         alt="SigiMarga"
-                        className={`h-20 md:h-28 w-auto mx-auto mb-8 drop-shadow-lg transition-all ${dm ? 'brightness-0 invert' : ''}`}
+                        className="h-20 md:h-28 w-auto mx-auto mb-8 drop-shadow-lg transition-all"
                     />
 
                     {/* Badge */}
