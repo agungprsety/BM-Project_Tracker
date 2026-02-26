@@ -35,18 +35,18 @@ export default function Weekly({ projectId, reports = [], boq = [], onUpdate, co
     const validationErrors: string[] = [];
 
     if (!newReport.weekNumber || !newReport.startDate || !newReport.endDate) {
-      validationErrors.push('Week number, start date, and end date are required.');
+      validationErrors.push('Week identifier and period duration are required for record initialization.');
     }
 
     // Validate dates within contract range
     if (newReport.startDate && contractStartDate && newReport.startDate < contractStartDate) {
-      validationErrors.push(`Start date cannot be before contract start (${formatDate(contractStartDate)}).`);
+      validationErrors.push(`Work initialization date precedes contractual start (${formatDate(contractStartDate)}).`);
     }
     if (newReport.endDate && contractEndDate && newReport.endDate > contractEndDate) {
-      validationErrors.push(`End date cannot be after contract end (${formatDate(contractEndDate)}).`);
+      validationErrors.push(`Work completion date exceeds contractual limit (${formatDate(contractEndDate)}).`);
     }
     if (newReport.startDate && newReport.endDate && newReport.startDate > newReport.endDate) {
-      validationErrors.push('Start date cannot be after end date.');
+      validationErrors.push('Temporal logic error: Start date cannot exceed end date.');
     }
 
     // Build itemProgress and validate quantities

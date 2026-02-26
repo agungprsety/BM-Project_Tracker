@@ -18,6 +18,8 @@ export interface Project {
   weeklyReports: WeeklyReport[];
   photos: Photo[];
   createdBy?: string;
+  createdByNickname?: string;
+  updatedByNickname?: string;
   createdAt: string;
   updatedAt: string;
 }

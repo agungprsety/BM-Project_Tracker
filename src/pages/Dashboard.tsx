@@ -3,10 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '@/store';
 import { useProjects } from '@/hooks/useProjects';
 import { exportAllProjectsSummary } from '@/lib/exportPdf';
-import { calculateProgress, formatCurrency, formatLength } from '@/lib/utils';
+import { calculateProgress, calculateTimeProgress, getScheduleStatus, formatCurrency, formatLength } from '@/lib/utils';
 import { DISTRICTS } from '@/data/districts';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from 'recharts';
-import { MapPin, FileDown, Search, ChevronLeft, ChevronRight, ArrowUpDown, Filter } from 'lucide-react';
+import { MapPin, FileDown, Search, ChevronLeft, ChevronRight, ArrowUpDown, Filter, AlertTriangle, Clock } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
@@ -20,7 +20,7 @@ const BUCKETS = [
   { label: '75–100%', key: 'done', color: '#16a34a', min: 75, max: 101 },
 ] as const;
 
-type SortKey = 'name' | 'contractor' | 'supervisor' | 'progress' | 'value' | 'district' | 'subDistrict' | 'averageWidth' | 'length' | 'roadHierarchy';
+type SortKey = 'name' | 'contractor' | 'supervisor' | 'progress' | 'value' | 'district' | 'subDistrict' | 'averageWidth' | 'length' | 'roadHierarchy' | 'schedule';
 type SortDir = 'asc' | 'desc';
 
 export default function Dashboard() {
@@ -38,13 +38,19 @@ export default function Dashboard() {
   const [filterDistrict, setFilterDistrict] = useState('');
   const [filterSubDistrict, setFilterSubDistrict] = useState('');
 
-  // Pre-compute progress for each project
+  // Pre-compute progress and schedule for each project
   const enriched = useMemo(() =>
-    projects.map((p) => ({
-      ...p,
-      _progress: calculateProgress(p.boq || [], p.weeklyReports || []),
-      _value: p.boq?.reduce((s, i) => s + (i.quantity * i.unitPrice), 0) || 0,
-    })),
+    projects.map((p) => {
+      const physical = calculateProgress(p.boq || [], p.weeklyReports || []);
+      const time = calculateTimeProgress(p.startDate, p.endDate);
+      return {
+        ...p,
+        _progress: physical,
+        _timeProgress: time,
+        _status: getScheduleStatus(physical, time),
+        _value: p.boq?.reduce((s, i) => s + (i.quantity * i.unitPrice), 0) || 0,
+      };
+    }),
     [projects]
   );
 
@@ -54,6 +60,7 @@ export default function Dashboard() {
     ? enriched.reduce((s, p) => s + p._progress, 0) / enriched.length
     : 0;
   const totalLength = enriched.reduce((s, p) => s + (p.length || 0), 0);
+  const delayedCount = enriched.filter(p => p._status === 'delayed' || p._status === 'at-risk').length;
 
   // Filtered projects (excluding bucket filter) - for the chart
   const projectsForChart = useMemo(() => {
@@ -125,6 +132,11 @@ export default function Dashboard() {
         case 'averageWidth': cmp = (a.averageWidth || 0) - (b.averageWidth || 0); break;
         case 'length': cmp = (a.length || 0) - (b.length || 0); break;
         case 'roadHierarchy': cmp = (a.roadHierarchy || '').localeCompare(b.roadHierarchy || ''); break;
+        case 'schedule': {
+          const statusOrder = { 'ahead': 0, 'on-track': 1, 'at-risk': 2, 'delayed': 3 };
+          cmp = statusOrder[a._status] - statusOrder[b._status];
+          break;
+        }
       }
       return sortDir === 'asc' ? cmp : -cmp;
     });
@@ -200,8 +212,17 @@ export default function Dashboard() {
           <p className="text-2xl font-bold text-green-600">{avgProgress.toFixed(1)}%</p>
         </Card>
         <Card darkMode={darkMode}>
-          <p className={`text-sm font-medium mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Total Length</p>
-          <p className="text-2xl font-bold text-purple-600">{formatLength(totalLength)}</p>
+          <div className="flex justify-between items-start">
+            <div>
+              <p className={`text-sm font-medium mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Schedule Monitoring</p>
+              <p className={`text-2xl font-bold ${delayedCount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                {delayedCount} At Risk
+              </p>
+            </div>
+            <div className={`p-2 rounded-lg ${delayedCount > 0 ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
+              <AlertTriangle size={20} />
+            </div>
+          </div>
         </Card>
       </div>
 
@@ -359,6 +380,7 @@ export default function Dashboard() {
                       ['length', t('dashboard.thLength')],
                       ['roadHierarchy', t('dashboard.thHierarchy')],
                       ['progress', t('dashboard.thProgress')],
+                      ['schedule', 'Schedule'],
                       ['value', t('dashboard.thValue')]
                     ] as [SortKey, string][]).map(([key, label]) => (
                       <th
@@ -378,7 +400,7 @@ export default function Dashboard() {
                 <tbody>
                   {paged.length === 0 ? (
                     <tr>
-                      <td colSpan={11} className="px-4 py-8 text-center">
+                      <td colSpan={12} className="px-4 py-8 text-center">
                         <p className={darkMode ? 'text-gray-400' : 'text-gray-500'}>{t('dashboard.noProjects')}</p>
                       </td>
                     </tr>
@@ -406,6 +428,17 @@ export default function Dashboard() {
                               <div className={`${getProgressColor(project._progress)} h-2 rounded-full transition-all`} style={{ width: `${project._progress}%` }}></div>
                             </div>
                             <span className="text-xs font-medium whitespace-nowrap">{project._progress.toFixed(1)}%</span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-3">
+                          <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                            project._status === 'delayed' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                            project._status === 'at-risk' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
+                            project._status === 'ahead' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                            'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                          }`}>
+                            {project._status === 'delayed' || project._status === 'at-risk' ? <AlertTriangle size={10} /> : <Clock size={10} />}
+                            {project._status.replace('-', ' ')}
                           </div>
                         </td>
                         <td className="px-3 py-3 text-sm whitespace-nowrap">{formatCurrency(project._value)}</td>

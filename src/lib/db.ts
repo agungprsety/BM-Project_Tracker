@@ -80,6 +80,8 @@ function mapProjectFromDb(row: any): Project {
     weeklyReports,
     photos: projectPhotos,
     createdBy: row.created_by || undefined,
+    createdByNickname: row.creator?.nickname || undefined,
+    updatedByNickname: row.editor?.nickname || undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -89,6 +91,8 @@ function mapProjectFromDb(row: any): Project {
 
 const SELECT_QUERY = `
   *,
+  creator:profiles!projects_created_by_profiles_fkey(nickname),
+  editor:profiles!projects_updated_by_profiles_fkey(nickname),
   boq_items(*),
   weekly_reports(
     *,

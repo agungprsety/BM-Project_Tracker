@@ -5,8 +5,10 @@ import type { User, Session } from '@supabase/supabase-js';
 interface AuthContextType {
     user: User | null;
     session: Session | null;
+    nickname: string | null;
     loading: boolean;
     signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+    signUp: (email: string, password: string, nickname: string) => Promise<{ error: Error | null }>;
     signOut: () => Promise<void>;
 }
 
@@ -15,14 +17,18 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const isSupabaseConfigured = supabaseUrl.length > 0;
 
+function extractNickname(user: User | null): string | null {
+    return user?.user_metadata?.nickname ?? null;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [session, setSession] = useState<Session | null>(null);
+    const [nickname, setNickname] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         if (!isSupabaseConfigured) {
-            // Supabase not configured — skip auth, treat as unauthenticated
             setLoading(false);
             return;
         }
@@ -31,6 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         supabase.auth.getSession().then(({ data: { session } }) => {
             setSession(session);
             setUser(session?.user ?? null);
+            setNickname(extractNickname(session?.user ?? null));
             setLoading(false);
         }).catch(() => {
             setLoading(false);
@@ -41,6 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             (_event, session) => {
                 setSession(session);
                 setUser(session?.user ?? null);
+                setNickname(extractNickname(session?.user ?? null));
                 setLoading(false);
             }
         );
@@ -56,6 +64,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: error as Error | null };
     };
 
+    const signUp = async (email: string, password: string, nickname: string) => {
+        if (!isSupabaseConfigured) {
+            return { error: new Error('Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file.') };
+        }
+        const { error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: { data: { nickname } },
+        });
+        return { error: error as Error | null };
+    };
+
     const signOut = async () => {
         if (isSupabaseConfigured) {
             await supabase.auth.signOut();
@@ -63,7 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     return (
-        <AuthContext.Provider value={{ user, session, loading, signIn, signOut }}>
+        <AuthContext.Provider value={{ user, session, nickname, loading, signIn, signUp, signOut }}>
             {children}
         </AuthContext.Provider>
     );

@@ -3,7 +3,7 @@ import { useAppStore } from '@/store';
 import { useProject } from '@/hooks/useProjects';
 import { calculateProgress, calculateBoQTotal, getCompletedByItem, formatCurrency, formatDate, formatLength, formatArea } from '@/lib/utils';
 import { exportProjectDetail } from '@/lib/exportPdf';
-import { MapPin, FileDown, Eye, ChevronLeft } from 'lucide-react';
+import { MapPin, FileDown, Eye, ChevronLeft, ShieldCheck, User, History } from 'lucide-react';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import BoQ from '@/components/features/BoQ';
@@ -199,6 +199,40 @@ export default function ProjectView() {
                     <div className={`flex justify-between text-xs mt-1 ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
                         <span>{formatCurrency(completedValue)} completed</span>
                         <span>{formatCurrency(totalValue - completedValue)} remaining</span>
+                    </div>
+                </div>
+
+                {/* Audit Record */}
+                <div className={`mt-8 pt-6 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                    <div className="flex flex-col sm:flex-row justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-lg ${darkMode ? 'bg-gray-800' : 'bg-gray-100'}`}>
+                                <ShieldCheck size={18} className="text-blue-500" />
+                            </div>
+                            <div>
+                                <p className={`text-[10px] uppercase font-bold tracking-widest ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>Public Project Registry Record</p>
+                                <p className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                                    Authenticated via @{project.createdByNickname || 'Government Portal'}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap gap-x-8 gap-y-2">
+                            <div className="flex items-center gap-2">
+                                <User size={14} className={darkMode ? 'text-gray-500' : 'text-gray-400'} />
+                                <span className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                                    Origin: <span className="font-medium text-blue-500">@{project.createdByNickname || 'unknown'}</span>
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <History size={14} className={darkMode ? 'text-gray-500' : 'text-gray-400'} />
+                                <span className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                                    Last Verification: <span className="font-medium text-amber-500">@{project.updatedByNickname || project.createdByNickname || 'N/A'}</span>
+                                </span>
+                            </div>
+                            <div className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-400'} font-mono`}>
+                                ID: {project.id.slice(0, 8)}...
+                            </div>
+                        </div>
                     </div>
                 </div>
             </Card>

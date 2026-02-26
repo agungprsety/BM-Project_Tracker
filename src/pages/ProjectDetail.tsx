@@ -3,7 +3,7 @@ import { useAppStore } from '@/store';
 import { useProject, useUpdateProject, useDeleteProject } from '@/hooks/useProjects';
 import { calculateProgress, calculateBoQTotal, getCompletedByItem, formatCurrency, formatDate, formatLength, formatArea, generateId } from '@/lib/utils';
 import { exportProjectDetail } from '@/lib/exportPdf';
-import { MapPin, Edit2, Trash2, FileDown } from 'lucide-react';
+import { MapPin, Edit2, Trash2, FileDown, ShieldCheck, User, History } from 'lucide-react';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import BoQ from '@/components/features/BoQ';
@@ -34,8 +34,8 @@ export default function ProjectDetail() {
     return (
       <div className="max-w-6xl mx-auto">
         <Card darkMode={darkMode} className="text-center py-12">
-          <p className="text-lg mb-4">Project not found</p>
-          <Button onClick={() => navigate('/dashboard')}>Back to Dashboard</Button>
+          <p className="text-lg mb-4">Project identifier not found in registry.</p>
+          <Button onClick={() => navigate('/dashboard')}>Return to Oversight Console</Button>
         </Card>
       </div>
     );
@@ -87,7 +87,7 @@ export default function ProjectDetail() {
       updateMutation.mutate({ id: project.id, updates: { photos: updatedPhotos } });
     } catch (error) {
       console.error("Failed to upload photos:", error);
-      alert("Failed to upload one or more photos. Are your storage policies and bucket set up?");
+      alert("Verification photo upload failed. System could not establish a secure connection to storage.");
     }
   };
 
@@ -96,8 +96,13 @@ export default function ProjectDetail() {
     updateMutation.mutate({ id: project.id, updates: { photos: updatedPhotos } });
   };
 
+  const handleUpdateCaption = (photoId: string, caption: string) => {
+    const updatedPhotos = project.photos?.map((p) => p.id === photoId ? { ...p, caption } : p) || [];
+    updateMutation.mutate({ id: project.id, updates: { photos: updatedPhotos } });
+  };
+
   const handleDelete = async () => {
-    if (!window.confirm('Are you sure you want to delete this project? This action cannot be undone.')) {
+    if (!window.confirm('Are you sure you want to permanently delete this project? This action will result in total data loss and cannot be reversed.')) {
       return;
     }
     deleteMutation.mutate(project.id, {
@@ -247,6 +252,40 @@ export default function ProjectDetail() {
             <span>{formatCurrency(totalValue - completedValue)} remaining</span>
           </div>
         </div>
+
+        {/* Audit Record */}
+        <div className={`mt-8 pt-6 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+          <div className="flex flex-col sm:flex-row justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-lg ${darkMode ? 'bg-gray-800' : 'bg-gray-100'}`}>
+                <ShieldCheck size={18} className="text-blue-500" />
+              </div>
+              <div>
+                <p className={`text-[10px] uppercase font-bold tracking-widest ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>Project Integrity Record</p>
+                <p className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  Authorized by @{project.createdByNickname || 'system'}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-x-8 gap-y-2">
+              <div className="flex items-center gap-2">
+                <User size={14} className={darkMode ? 'text-gray-500' : 'text-gray-400'} />
+                <span className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  Origin: <span className="font-medium text-blue-500">@{project.createdByNickname || 'unknown'}</span>
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <History size={14} className={darkMode ? 'text-gray-500' : 'text-gray-400'} />
+                <span className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  Last Modification: <span className="font-medium text-amber-500">@{project.updatedByNickname || project.createdByNickname || 'N/A'}</span>
+                </span>
+              </div>
+              <div className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-400'} font-mono`}>
+                ID: {project.id.slice(0, 8)}...
+              </div>
+            </div>
+          </div>
+        </div>
       </Card>
 
       {/* Project Map */}
@@ -257,6 +296,7 @@ export default function ProjectDetail() {
         photos={project.photos || []}
         onUpload={handlePhotoUpload}
         onDelete={handleDeletePhoto}
+        onUpdateCaption={handleUpdateCaption}
         darkMode={darkMode}
       />
 

@@ -90,13 +90,13 @@ export default function ProjectForm() {
   const validate = (): boolean => {
     const newErrors: Partial<Record<keyof FormData, string>> = {};
 
-    if (!formData.name.trim()) newErrors.name = 'Project name is required';
-    if (!formData.contractor.trim()) newErrors.contractor = 'Contractor is required';
-    if (!formData.supervisor.trim()) newErrors.supervisor = 'Supervisor is required';
-    if (!formData.startDate) newErrors.startDate = 'Start date is required';
-    if (!formData.endDate) newErrors.endDate = 'End date is required';
+    if (!formData.name.trim()) newErrors.name = 'Project designation is mandatory';
+    if (!formData.contractor.trim()) newErrors.contractor = 'Contractor assignment required';
+    if (!formData.supervisor.trim()) newErrors.supervisor = 'Supervisory authority required';
+    if (!formData.startDate) newErrors.startDate = 'Project initialization date required';
+    if (!formData.endDate) newErrors.endDate = 'Project completion deadline required';
     if (formData.startDate && formData.endDate && formData.startDate > formData.endDate) {
-      newErrors.endDate = 'End date must be after start date';
+      newErrors.endDate = 'Temporal error: Completion deadline precedes initialization';
     }
     if (!formData.length || isNaN(Number(formData.length)) || Number(formData.length) <= 0) {
       newErrors.length = 'Length must be a positive number';

@@ -4,7 +4,7 @@
 
 <img src="sigi_margafull_transparent.png" alt="SigiMarga Logo" width="400" />
 
-**Digital Intelligence for Urban Infrastructure**
+**Digital Intelligence for Road Projects Management**
 
 The professional monitoring ecosystem for Bina Marga Kota Jambi.
 Trace every kilometer of progress with real-time geospatial tracking, automated S-Curves, and audit-ready documentation.

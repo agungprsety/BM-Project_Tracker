@@ -90,3 +90,38 @@ export const calculateProgress = (
 
   return Math.min(100, (completedValue / totalValue) * 100);
 };
+
+/**
+ * Calculate percentage of contract time elapsed.
+ * (Today - Start) / (End - Start) * 100
+ */
+export const calculateTimeProgress = (startDate: string, endDate: string): number => {
+  const start = new Date(startDate).getTime();
+  const end = new Date(endDate).getTime();
+  const now = new Date().getTime();
+
+  if (isNaN(start) || isNaN(end)) return 0;
+  if (now <= start) return 0;
+  if (now >= end) return 100;
+
+  const total = end - start;
+  const elapsed = now - start;
+
+  if (total <= 0) return 100;
+
+  return Math.min(100, (elapsed / total) * 100);
+};
+
+/**
+ * Determine if a project is significantly delayed.
+ * A project is "At Risk" if Physical Progress < Time Progress - Threshold (e.g., 10%)
+ */
+export const getScheduleStatus = (physicalProgress: number, timeProgress: number): 'ahead' | 'on-track' | 'at-risk' | 'delayed' => {
+  const slippage = physicalProgress - timeProgress;
+
+  if (physicalProgress >= 100) return 'on-track'; // Completed
+  if (slippage < -15) return 'delayed';
+  if (slippage < -5) return 'at-risk';
+  if (slippage > 5) return 'ahead';
+  return 'on-track';
+};

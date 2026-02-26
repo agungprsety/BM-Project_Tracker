@@ -11,6 +11,7 @@ import { useAppStore } from '@/store';
 const Landing = lazy(() => import('@/pages/Landing'));
 const PublicDashboard = lazy(() => import('@/pages/PublicDashboard'));
 const Login = lazy(() => import('@/pages/Login'));
+const Register = lazy(() => import('@/pages/Register'));
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
 const ProjectForm = lazy(() => import('@/pages/ProjectForm'));
 const ProjectDetail = lazy(() => import('@/pages/ProjectDetail'));
@@ -60,6 +61,7 @@ function App() {
                 <Route path="/" element={<Landing />} />
                 <Route path="/explore" element={<PublicDashboard />} />
                 <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
                 <Route path="/view/:id" element={<ProjectView />} />
 
                 {/* Protected routes — require login */}
