@@ -90,13 +90,13 @@ export default function ProjectForm() {
   const validate = (): boolean => {
     const newErrors: Partial<Record<keyof FormData, string>> = {};
 
-    if (!formData.name.trim()) newErrors.name = 'Project designation is mandatory';
-    if (!formData.contractor.trim()) newErrors.contractor = 'Contractor assignment required';
-    if (!formData.supervisor.trim()) newErrors.supervisor = 'Supervisory authority required';
-    if (!formData.startDate) newErrors.startDate = 'Project initialization date required';
-    if (!formData.endDate) newErrors.endDate = 'Project completion deadline required';
+    if (!formData.name.trim()) newErrors.name = 'Please enter a project name';
+    if (!formData.contractor.trim()) newErrors.contractor = 'Please enter the contractor name';
+    if (!formData.supervisor.trim()) newErrors.supervisor = 'Please enter the supervisor name';
+    if (!formData.startDate) newErrors.startDate = 'Please select a start date';
+    if (!formData.endDate) newErrors.endDate = 'Please select an end date';
     if (formData.startDate && formData.endDate && formData.startDate > formData.endDate) {
-      newErrors.endDate = 'Temporal error: Completion deadline precedes initialization';
+      newErrors.endDate = 'End date must be after the start date';
     }
     if (!formData.length || isNaN(Number(formData.length)) || Number(formData.length) <= 0) {
       newErrors.length = 'Length must be a positive number';
@@ -180,12 +180,12 @@ export default function ProjectForm() {
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
   const districtOptions = [
-    { value: '', label: '-- Select District --' },
+    { value: '', label: 'Select district' },
     ...DISTRICTS.map((d) => ({ value: d.name, label: `${d.name} (${d.code})` })),
   ];
 
   const subDistrictSelectOptions = [
-    { value: '', label: formData.district ? '-- Select Sub-district --' : '-- Select district first --' },
+    { value: '', label: formData.district ? 'Select sub-district' : 'Select a district first' },
     ...subDistrictOptions,
   ];
 
@@ -224,7 +224,7 @@ export default function ProjectForm() {
             value={formData.name}
             onChange={(e) => handleChange('name', e.target.value)}
             error={errors.name}
-            placeholder="Enter project name"
+            placeholder="e.g. Jl. H. Agus Salim"
           />
 
           <Input
@@ -232,7 +232,7 @@ export default function ProjectForm() {
             value={formData.contractor}
             onChange={(e) => handleChange('contractor', e.target.value)}
             error={errors.contractor}
-            placeholder="Enter contractor name"
+            placeholder="e.g. PT Pembangunan Jaya"
           />
 
           <Input
@@ -240,7 +240,7 @@ export default function ProjectForm() {
             value={formData.supervisor}
             onChange={(e) => handleChange('supervisor', e.target.value)}
             error={errors.supervisor}
-            placeholder="Enter supervisor name"
+            placeholder="e.g. CV Konsultan Mandiri"
           />
 
           <Input
@@ -249,7 +249,7 @@ export default function ProjectForm() {
             value={formData.length}
             onChange={(e) => handleChange('length', e.target.value)}
             error={errors.length}
-            placeholder="Enter road length"
+            placeholder="e.g. 500"
             min="0"
             step="0.01"
           />
@@ -260,7 +260,7 @@ export default function ProjectForm() {
             value={formData.averageWidth}
             onChange={(e) => handleChange('averageWidth', e.target.value)}
             error={errors.averageWidth}
-            placeholder="Enter average width"
+            placeholder="e.g. 6"
             min="0"
             step="0.01"
           />
