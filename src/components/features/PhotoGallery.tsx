@@ -4,7 +4,7 @@ import Card from '@/components/ui/Card';
 
 interface PhotoGalleryProps {
   photos: Photo[];
-  onUpload?: (files: FileList) => void;
+  onUpload?: (files: File[]) => void;
   onDelete?: (id: string) => void;
   onUpdateCaption?: (id: string, caption: string) => void;
   darkMode?: boolean;
@@ -85,8 +85,11 @@ export default function PhotoGallery({ photos = [], onUpload, onDelete, onUpdate
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      onUpload?.(e.target.files);
+      // IMPORTANT: Copy files to array BEFORE clearing input.
+      // FileList is a live reference — clearing input empties it.
+      const filesCopy = Array.from(e.target.files);
       e.target.value = '';
+      onUpload?.(filesCopy);
     }
   };
 

@@ -66,7 +66,7 @@ export default function ProjectDetail() {
   };
 
 
-  const handlePhotoUpload = async (files: FileList) => {
+  const handlePhotoUpload = async (files: File[]) => {
     console.log('[PhotoUpload] Started. Files:', files.length);
     setUploading(true);
     try {
@@ -74,7 +74,7 @@ export default function ProjectDetail() {
 
       const newPhotos: Photo[] = [];
 
-      for (const file of Array.from(files)) {
+      for (const file of files) {
         console.log('[PhotoUpload] Uploading file:', file.name, 'Size:', file.size, 'Type:', file.type);
         try {
           const publicUrl = await projectService.uploadPhoto(file, project.id);
