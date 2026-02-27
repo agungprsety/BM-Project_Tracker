@@ -180,30 +180,32 @@ export default function Weekly({ projectId, reports = [], boq = [], onUpdate, co
                 {/* Expanded: show per-item quantities for this report */}
                 {isExpanded && report.itemProgress && report.itemProgress.length > 0 && (
                   <div className={`px-4 pb-4 border-t ${darkMode ? 'border-gray-600' : 'border-gray-200'}`}>
-                    <table className="w-full text-xs mt-3">
-                      <thead>
-                        <tr className={darkMode ? 'text-gray-400' : 'text-gray-500'}>
-                          <th className="text-left py-1">BoQ Item</th>
-                          <th className="text-right py-1">This Week</th>
-                          <th className="text-right py-1">Contract Qty</th>
-                          <th className="text-right py-1">Unit</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {report.itemProgress.map((ip) => {
-                          const item = boq.find((b) => b.id === ip.boqItemId);
-                          if (!item) return null;
-                          return (
-                            <tr key={ip.boqItemId} className={`border-t ${darkMode ? 'border-gray-600' : 'border-gray-200'}`}>
-                              <td className="py-1">{item.itemNumber} - {item.description}</td>
-                              <td className="py-1 text-right font-medium">{ip.quantity}</td>
-                              <td className="py-1 text-right">{item.quantity}</td>
-                              <td className="py-1 text-right">{item.unit}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[400px] text-xs mt-3">
+                        <thead>
+                          <tr className={darkMode ? 'text-gray-400' : 'text-gray-500'}>
+                            <th className="text-left py-1">BoQ Item</th>
+                            <th className="text-right py-1">This Week</th>
+                            <th className="text-right py-1">Contract Qty</th>
+                            <th className="text-right py-1">Unit</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {report.itemProgress.map((ip) => {
+                            const item = boq.find((b) => b.id === ip.boqItemId);
+                            if (!item) return null;
+                            return (
+                              <tr key={ip.boqItemId} className={`border-t ${darkMode ? 'border-gray-600' : 'border-gray-200'}`}>
+                                <td className="py-1">{item.itemNumber} - {item.description}</td>
+                                <td className="py-1 text-right font-medium">{ip.quantity}</td>
+                                <td className="py-1 text-right">{item.quantity}</td>
+                                <td className="py-1 text-right">{item.unit}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
               </div>
@@ -213,49 +215,53 @@ export default function Weekly({ projectId, reports = [], boq = [], onUpdate, co
       )}
 
       {/* Cumulative Progress Summary */}
-      {boq.length > 0 && reports.length > 0 && (
-        <div className={`mt-4 pt-4 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-          <h4 className="font-semibold mb-3 text-sm">Cumulative Progress per BoQ Item</h4>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className={darkMode ? 'text-gray-400' : 'text-gray-500'}>
-                <th className="text-left py-1">Item</th>
-                <th className="text-right py-1">Completed</th>
-                <th className="text-right py-1">Contract Qty</th>
-                <th className="text-right py-1">Unit</th>
-                <th className="text-right py-1">Progress</th>
-              </tr>
-            </thead>
-            <tbody>
-              {boq.map((item) => {
-                const completed = cumulativeMap[item.id] || 0;
-                const pct = item.quantity > 0 ? Math.min(100, (completed / item.quantity) * 100) : 0;
-                return (
-                  <tr key={item.id} className={`border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-                    <td className="py-1.5">{item.itemNumber} - {item.description}</td>
-                    <td className="py-1.5 text-right font-medium">{completed.toLocaleString('id-ID')}</td>
-                    <td className="py-1.5 text-right">{item.quantity.toLocaleString('id-ID')}</td>
-                    <td className="py-1.5 text-right">{item.unit}</td>
-                    <td className="py-1.5 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <div className={`w-16 ${darkMode ? 'bg-gray-600' : 'bg-gray-200'} rounded-full h-1.5`}>
-                          <div
-                            className={`h-1.5 rounded-full ${pct >= 100 ? 'bg-green-500' : 'bg-blue-500'}`}
-                            style={{ width: `${pct}%` }}
-                          ></div>
-                        </div>
-                        <span className={`text-xs font-medium ${pct >= 100 ? 'text-green-500' : ''}`}>
-                          {pct.toFixed(0)}%
-                        </span>
-                      </div>
-                    </td>
+      {
+        boq.length > 0 && reports.length > 0 && (
+          <div className={`mt-4 pt-4 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+            <h4 className="font-semibold mb-3 text-sm">Cumulative Progress per BoQ Item</h4>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[500px] text-sm">
+                <thead>
+                  <tr className={darkMode ? 'text-gray-400' : 'text-gray-500'}>
+                    <th className="text-left py-1">Item</th>
+                    <th className="text-right py-1">Completed</th>
+                    <th className="text-right py-1">Contract Qty</th>
+                    <th className="text-right py-1">Unit</th>
+                    <th className="text-right py-1">Progress</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+                </thead>
+                <tbody>
+                  {boq.map((item) => {
+                    const completed = cumulativeMap[item.id] || 0;
+                    const pct = item.quantity > 0 ? Math.min(100, (completed / item.quantity) * 100) : 0;
+                    return (
+                      <tr key={item.id} className={`border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                        <td className="py-1.5">{item.itemNumber} - {item.description}</td>
+                        <td className="py-1.5 text-right font-medium">{completed.toLocaleString('id-ID')}</td>
+                        <td className="py-1.5 text-right">{item.quantity.toLocaleString('id-ID')}</td>
+                        <td className="py-1.5 text-right">{item.unit}</td>
+                        <td className="py-1.5 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <div className={`w-16 ${darkMode ? 'bg-gray-600' : 'bg-gray-200'} rounded-full h-1.5`}>
+                              <div
+                                className={`h-1.5 rounded-full ${pct >= 100 ? 'bg-green-500' : 'bg-blue-500'}`}
+                                style={{ width: `${pct}%` }}
+                              ></div>
+                            </div>
+                            <span className={`text-xs font-medium ${pct >= 100 ? 'text-green-500' : ''}`}>
+                              {pct.toFixed(0)}%
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
+      }
 
       {/* Add Report Form */}
       {isAdding && !readonly && (
@@ -297,8 +303,8 @@ export default function Weekly({ projectId, reports = [], boq = [], onUpdate, co
             <h5 className={`text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
               Progress This Week (quantities completed)
             </h5>
-            <div className={`rounded-lg border ${darkMode ? 'border-gray-600' : 'border-gray-300'}`}>
-              <table className="w-full text-sm">
+            <div className={`rounded-lg border overflow-x-auto ${darkMode ? 'border-gray-600' : 'border-gray-300'}`}>
+              <table className="w-full min-w-[400px] text-sm">
                 <thead>
                   <tr className={darkMode ? 'bg-gray-600 text-gray-300' : 'bg-gray-100 text-gray-500'}>
                     <th className="px-3 py-2 text-left">Item</th>

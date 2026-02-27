@@ -381,15 +381,24 @@ export default function Dashboard() {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full min-w-[800px]" style={{ tableLayout: 'fixed' }}>
+                <colgroup>
+                  <col style={{ width: '16%' }} />{/* Project Name */}
+                  <col style={{ width: '14%' }} />{/* Contractor / Consultant */}
+                  <col style={{ width: '12%' }} />{/* District / Sub-district */}
+                  <col style={{ width: '7%' }} />{/* Width */}
+                  <col style={{ width: '7%' }} />{/* Length */}
+                  <col style={{ width: '8%' }} />{/* Road Class */}
+                  <col style={{ width: '12%' }} />{/* Progress */}
+                  <col style={{ width: '14%' }} />{/* Schedule */}
+                  <col style={{ width: '10%' }} />{/* Value */}
+                </colgroup>
                 <thead>
                   <tr className={darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-50 text-gray-500'}>
                     {([
                       ['name', t('dashboard.thProject')],
                       ['contractor', t('dashboard.thContractor')],
-                      ['supervisor', t('dashboard.thConsultant')],
                       ['district', t('dashboard.thDistrict')],
-                      ['subDistrict', t('dashboard.thSubDistrict')],
                       ['averageWidth', t('dashboard.thAvgWidth')],
                       ['length', t('dashboard.thLength')],
                       ['roadHierarchy', t('dashboard.thHierarchy')],
@@ -399,90 +408,89 @@ export default function Dashboard() {
                     ] as [SortKey, string][]).map(([key, label]) => (
                       <th
                         key={key}
-                        className="px-3 py-3 text-left text-xs font-medium cursor-pointer select-none hover:text-blue-600 transition-colors whitespace-nowrap"
+                        className="px-2 py-2.5 text-left text-[11px] font-medium cursor-pointer select-none hover:text-blue-600 transition-colors truncate"
                         onClick={() => toggleSort(key)}
                       >
-                        <span className="flex items-center gap-1">
-                          {label}
-                          <ArrowUpDown size={11} className={sortKey === key ? 'text-blue-500' : 'opacity-40'} />
+                        <span className="flex items-center gap-0.5">
+                          <span className="truncate">{label}</span>
+                          <ArrowUpDown size={10} className={`shrink-0 ${sortKey === key ? 'text-blue-500' : 'opacity-40'}`} />
                         </span>
                       </th>
                     ))}
-                    <th className="px-3 py-3 text-left text-xs font-medium">{t('dashboard.thActions')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {paged.length === 0 ? (
                     <tr>
-                      <td colSpan={12} className="px-4 py-8 text-center">
+                      <td colSpan={9} className="px-4 py-8 text-center">
                         <p className={darkMode ? 'text-gray-400' : 'text-gray-500'}>{t('dashboard.noProjects')}</p>
                       </td>
                     </tr>
                   ) : (
                     paged.map((project) => (
-                      <tr key={project.id} className={`border-t ${darkMode ? 'border-gray-700 hover:bg-gray-700' : 'border-gray-200 hover:bg-gray-50'} transition-colors`}>
-                        <td className="px-3 py-3">
-                          <div className="font-medium">{project.name}</div>
+                      <tr key={project.id} className={`border-t ${darkMode ? 'border-gray-700 hover:bg-gray-700' : 'border-gray-200 hover:bg-gray-50'} transition-colors cursor-pointer`} onClick={() => navigate(`/projects/${project.id}`)}>
+                        <td className="px-2 py-2.5">
+                          <div className="font-medium text-sm truncate" title={project.name}>{project.name}</div>
                           {project.location && (
                             <a
                               href={`https://www.google.com/maps/search/?api=1&query=${project.location[0]},${project.location[1]}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className={`inline-flex items-center text-[10px] sm:text-xs mt-1 px-1.5 py-0.5 rounded transition-colors w-fit ${darkMode ? 'text-blue-400 bg-blue-900/20 hover:bg-blue-900/40' : 'text-blue-600 bg-blue-50 hover:bg-blue-100'}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className={`inline-flex items-center text-[10px] mt-0.5 px-1 py-0.5 rounded transition-colors w-fit ${darkMode ? 'text-blue-400 bg-blue-900/20 hover:bg-blue-900/40' : 'text-blue-600 bg-blue-50 hover:bg-blue-100'}`}
                             >
-                              <MapPin size={10} className="mr-0.5" />
+                              <MapPin size={9} className="mr-0.5" />
                               <span className="font-medium">Map</span>
                             </a>
                           )}
                         </td>
-                        <td className="px-3 py-3 text-sm">{project.contractor}</td>
-                        <td className="px-3 py-3 text-sm">{project.supervisor}</td>
-                        <td className="px-3 py-3 text-sm">{project.district || <span className="opacity-40">-</span>}</td>
-                        <td className="px-3 py-3 text-sm">{project.subDistrict || <span className="opacity-40">-</span>}</td>
-                        <td className="px-3 py-3 text-sm">{project.averageWidth ? `${project.averageWidth} m` : <span className="opacity-40">-</span>}</td>
-                        <td className="px-3 py-3 text-sm">{project.length ? `${project.length} m` : <span className="opacity-40">-</span>}</td>
-                        <td className="px-3 py-3 text-sm">{project.roadHierarchy || <span className="opacity-40">-</span>}</td>
-                        <td className="px-3 py-3">
-                          <div className="flex items-center gap-2">
-                            <div className={`w-20 ${darkMode ? 'bg-gray-600' : 'bg-gray-200'} rounded-full h-2`}>
-                              <div className={`${getProgressColor(project._progress)} h-2 rounded-full transition-all`} style={{ width: `${project._progress}%` }}></div>
+                        <td className="px-2 py-2.5">
+                          <div className="text-xs truncate" title={project.contractor}>{project.contractor}</div>
+                          <div className={`text-[11px] truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`} title={project.supervisor}>{project.supervisor}</div>
+                        </td>
+                        <td className="px-2 py-2.5">
+                          <div className="text-xs truncate" title={project.district || undefined}>{project.district || <span className="opacity-40">-</span>}</div>
+                          {project.subDistrict && <div className={`text-[11px] truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`} title={project.subDistrict}>{project.subDistrict}</div>}
+                        </td>
+                        <td className="px-2 py-2.5 text-xs">{project.averageWidth ? `${project.averageWidth} m` : <span className="opacity-40">-</span>}</td>
+                        <td className="px-2 py-2.5 text-xs">{project.length ? `${project.length} m` : <span className="opacity-40">-</span>}</td>
+                        <td className="px-2 py-2.5 text-xs truncate" title={project.roadHierarchy || undefined}>{project.roadHierarchy || <span className="opacity-40">-</span>}</td>
+                        <td className="px-2 py-2.5">
+                          <div className="flex items-center gap-1.5">
+                            <div className={`w-14 ${darkMode ? 'bg-gray-600' : 'bg-gray-200'} rounded-full h-1.5 shrink-0`}>
+                              <div className={`${getProgressColor(project._progress)} h-1.5 rounded-full transition-all`} style={{ width: `${project._progress}%` }}></div>
                             </div>
-                            <span className="text-xs font-medium whitespace-nowrap">{project._progress.toFixed(1)}%</span>
+                            <span className="text-[11px] font-medium whitespace-nowrap">{project._progress.toFixed(1)}%</span>
                           </div>
                         </td>
-                        <td className="px-3 py-3">
-                          <div className="flex flex-col items-start gap-1">
-                            <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${project._status === 'delayed' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                        <td className="px-2 py-2.5">
+                          <div className="flex flex-col items-start gap-0.5">
+                            <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider whitespace-nowrap ${project._status === 'delayed' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
                               project._status === 'at-risk' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
                                 project._status === 'ahead' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
                                   'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
                               }`}>
-                              {project._status === 'delayed' || project._status === 'at-risk' ? <AlertTriangle size={10} className="shrink-0" /> : <Clock size={10} className="shrink-0" />}
+                              {project._status === 'delayed' || project._status === 'at-risk' ? <AlertTriangle size={9} className="shrink-0" /> : <Clock size={9} className="shrink-0" />}
                               {project._status.replace('-', ' ')}
                             </div>
-                            <span className={`text-[11px] font-medium mt-0.5 whitespace-nowrap ${project._deadline.status === 'overdue' ? 'text-red-500' :
+                            <span className={`text-[10px] font-medium whitespace-nowrap ${project._deadline.status === 'overdue' ? 'text-red-500' :
                               project._deadline.status === 'ending-soon' ? 'text-amber-500' :
                                 darkMode ? 'text-gray-400' : 'text-gray-500'
                               }`}>
                               {project._deadline.label}
                             </span>
                             {(project as any)._reportStaleness !== 'fresh' && (
-                              <div className={`mt-1 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider whitespace-nowrap ${(project as any)._reportStaleness === 'critical'
+                              <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold tracking-wider whitespace-nowrap ${(project as any)._reportStaleness === 'critical'
                                 ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
                                 : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
                                 }`}>
-                                <AlertTriangle size={10} className="shrink-0" />
+                                <AlertTriangle size={9} className="shrink-0" />
                                 {(project as any)._daysSinceReport === Infinity ? t('staleness.noReports') : ((project as any)._reportStaleness === 'critical' ? t('staleness.critical', { days: (project as any)._daysSinceReport }) : t('staleness.stale', { days: (project as any)._daysSinceReport }))}
                               </div>
                             )}
                           </div>
                         </td>
-                        <td className="px-3 py-3 text-sm whitespace-nowrap">{formatCurrency(project._value)}</td>
-                        <td className="px-3 py-3">
-                          <Button size="sm" variant="secondary" onClick={() => navigate(`/projects/${project.id}`)}>
-                            {t('dashboard.btnView')}
-                          </Button>
-                        </td>
+                        <td className="px-2 py-2.5 text-xs whitespace-nowrap">{formatCurrency(project._value)}</td>
                       </tr>
                     ))
                   )}

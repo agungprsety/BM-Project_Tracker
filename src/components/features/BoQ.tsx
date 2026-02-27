@@ -67,7 +67,7 @@ export default function BoQ({ projectId, boq = [], onUpdate, darkMode = false, r
       ) : (
         <>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[700px] text-sm">
               <thead>
                 <tr className={darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-50 text-gray-500'}>
                   <th className="px-3 py-2 text-left">Item</th>
