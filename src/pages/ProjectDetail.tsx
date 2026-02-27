@@ -23,6 +23,7 @@ export default function ProjectDetail() {
   const { data: project, isLoading } = useProject(id);
   const updateMutation = useUpdateProject();
   const deleteMutation = useDeleteProject();
+  const [uploading, setUploading] = useState(false);
 
   if (isLoading) {
     return (
@@ -64,7 +65,6 @@ export default function ProjectDetail() {
     updateMutation.mutate({ id: project.id, updates: { weeklyReports } });
   };
 
-  const [uploading, setUploading] = useState(false);
 
   const handlePhotoUpload = async (files: FileList) => {
     console.log('[PhotoUpload] Started. Files:', files.length);
