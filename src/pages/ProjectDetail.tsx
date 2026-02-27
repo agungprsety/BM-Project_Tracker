@@ -71,44 +71,57 @@ export default function ProjectDetail() {
     setUploading(true);
     try {
       const { projectService } = await import('@/lib/db');
-      console.log('[PhotoUpload] projectService imported successfully');
 
       const newPhotos: Photo[] = [];
 
-      const uploadPromises = Array.from(files).map(async (file) => {
+      for (const file of Array.from(files)) {
         console.log('[PhotoUpload] Uploading file:', file.name, 'Size:', file.size, 'Type:', file.type);
-        const publicUrl = await projectService.uploadPhoto(file, project.id);
-        console.log('[PhotoUpload] Upload success. Public URL:', publicUrl);
-        return {
-          id: generateId(),
-          url: publicUrl,
-          createdAt: new Date().toISOString(),
-        };
-      });
+        try {
+          const publicUrl = await projectService.uploadPhoto(file, project.id);
+          console.log('[PhotoUpload] Upload success. Public URL:', publicUrl);
+          newPhotos.push({
+            id: generateId(),
+            url: publicUrl,
+            createdAt: new Date().toISOString(),
+          });
+        } catch (uploadErr: any) {
+          console.error('[PhotoUpload] Single file upload FAILED:', uploadErr);
+          alert(`Storage upload failed for ${file.name}: ${uploadErr?.message || JSON.stringify(uploadErr)}`);
+          setUploading(false);
+          return;
+        }
+      }
 
-      const uploadedPhotos = await Promise.all(uploadPromises);
-      newPhotos.push(...uploadedPhotos);
-      console.log('[PhotoUpload] All files uploaded. Saving to database...');
+      if (newPhotos.length === 0) {
+        alert('No photos were uploaded successfully.');
+        setUploading(false);
+        return;
+      }
+
+      console.log('[PhotoUpload] All files uploaded:', newPhotos.length, 'photos. URLs:', newPhotos.map(p => p.url));
 
       const updatedPhotos = [...(project.photos || []), ...newPhotos];
+      console.log('[PhotoUpload] Total photos to save:', updatedPhotos.length);
+
       updateMutation.mutate(
         { id: project.id, updates: { photos: updatedPhotos } },
         {
           onSuccess: () => {
             console.log('[PhotoUpload] Database sync success!');
             setUploading(false);
+            alert(`✅ Upload complete! ${newPhotos.length} photo(s) saved.`);
           },
           onError: (err) => {
             console.error('[PhotoUpload] Database sync FAILED:', err);
             setUploading(false);
-            alert(`Photo uploaded to storage but failed to save to database: ${err instanceof Error ? err.message : String(err)}`);
+            alert(`❌ Photo uploaded to storage but database sync failed: ${err instanceof Error ? err.message : String(err)}`);
           },
         }
       );
     } catch (error: any) {
       console.error('[PhotoUpload] FAILED:', error);
       setUploading(false);
-      alert(`Photo upload failed: ${error?.message || error?.statusCode || JSON.stringify(error)}`);
+      alert(`❌ Photo upload failed: ${error?.message || error?.statusCode || JSON.stringify(error)}`);
     }
   };
 

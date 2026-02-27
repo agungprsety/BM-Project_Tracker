@@ -263,6 +263,8 @@ export const projectService = {
       }
     });
 
+    console.log('[_callSyncRpc] p_photos count:', p_photos.length, 'photos:', JSON.stringify(p_photos.map((p: any) => ({ id: p.id, url: p.url?.substring(0, 50) }))));
+
     const { error } = await supabase.rpc('sync_project_complete', {
       p_project,
       p_boq_items,
