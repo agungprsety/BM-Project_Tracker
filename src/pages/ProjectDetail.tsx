@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppStore } from '@/store';
 import { useProject, useUpdateProject, useDeleteProject } from '@/hooks/useProjects';
@@ -63,18 +64,21 @@ export default function ProjectDetail() {
     updateMutation.mutate({ id: project.id, updates: { weeklyReports } });
   };
 
+  const [uploading, setUploading] = useState(false);
+
   const handlePhotoUpload = async (files: FileList) => {
+    console.log('[PhotoUpload] Started. Files:', files.length);
+    setUploading(true);
     try {
-      // The button handles its own visual loading, we just await all uploads here.
-      // Dynamic import to avoid circular dependency if projectService isn't handy, but we can import it.
-      // Wait, let's import projectService at the top!
       const { projectService } = await import('@/lib/db');
+      console.log('[PhotoUpload] projectService imported successfully');
 
       const newPhotos: Photo[] = [];
 
-      // Upload sequentially or in parallel. Parallel is faster.
       const uploadPromises = Array.from(files).map(async (file) => {
+        console.log('[PhotoUpload] Uploading file:', file.name, 'Size:', file.size, 'Type:', file.type);
         const publicUrl = await projectService.uploadPhoto(file, project.id);
+        console.log('[PhotoUpload] Upload success. Public URL:', publicUrl);
         return {
           id: generateId(),
           url: publicUrl,
@@ -84,12 +88,27 @@ export default function ProjectDetail() {
 
       const uploadedPhotos = await Promise.all(uploadPromises);
       newPhotos.push(...uploadedPhotos);
+      console.log('[PhotoUpload] All files uploaded. Saving to database...');
 
       const updatedPhotos = [...(project.photos || []), ...newPhotos];
-      updateMutation.mutate({ id: project.id, updates: { photos: updatedPhotos } });
-    } catch (error) {
-      console.error("Failed to upload photos:", error);
-      alert("Verification photo upload failed. System could not establish a secure connection to storage.");
+      updateMutation.mutate(
+        { id: project.id, updates: { photos: updatedPhotos } },
+        {
+          onSuccess: () => {
+            console.log('[PhotoUpload] Database sync success!');
+            setUploading(false);
+          },
+          onError: (err) => {
+            console.error('[PhotoUpload] Database sync FAILED:', err);
+            setUploading(false);
+            alert(`Photo uploaded to storage but failed to save to database: ${err instanceof Error ? err.message : String(err)}`);
+          },
+        }
+      );
+    } catch (error: any) {
+      console.error('[PhotoUpload] FAILED:', error);
+      setUploading(false);
+      alert(`Photo upload failed: ${error?.message || error?.statusCode || JSON.stringify(error)}`);
     }
   };
 
@@ -309,6 +328,7 @@ export default function ProjectDetail() {
         onDelete={handleDeletePhoto}
         onUpdateCaption={handleUpdateCaption}
         darkMode={darkMode}
+        uploading={uploading}
       />
 
       {/* BoQ Section */}

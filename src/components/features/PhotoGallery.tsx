@@ -9,6 +9,7 @@ interface PhotoGalleryProps {
   onUpdateCaption?: (id: string, caption: string) => void;
   darkMode?: boolean;
   readonly?: boolean;
+  uploading?: boolean;
 }
 
 function PhotoItem({ photo, onDelete, onUpdateCaption, darkMode, readonly }: {
@@ -57,9 +58,8 @@ function PhotoItem({ photo, onDelete, onUpdateCaption, darkMode, readonly }: {
             onChange={(e) => setLocalCaption(e.target.value)}
             onBlur={handleBlur}
             placeholder="Enter caption (e.g., Sta 0+500, Asphalt Layer 1...)"
-            className={`w-full text-xs p-2 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none outline-none transition-all ${
-              darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500' : 'bg-gray-50 border-gray-300 placeholder-gray-400'
-            }`}
+            className={`w-full text-xs p-2 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none outline-none transition-all ${darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500' : 'bg-gray-50 border-gray-300 placeholder-gray-400'
+              }`}
             rows={2}
           />
         ) : (
@@ -80,7 +80,7 @@ function PhotoItem({ photo, onDelete, onUpdateCaption, darkMode, readonly }: {
   );
 }
 
-export default function PhotoGallery({ photos = [], onUpload, onDelete, onUpdateCaption, darkMode = false, readonly = false }: PhotoGalleryProps) {
+export default function PhotoGallery({ photos = [], onUpload, onDelete, onUpdateCaption, darkMode = false, readonly = false, uploading = false }: PhotoGalleryProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -106,9 +106,17 @@ export default function PhotoGallery({ photos = [], onUpload, onDelete, onUpdate
             />
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium transition-colors flex items-center gap-2"
+              disabled={uploading}
+              className={`px-4 py-2 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${uploading ? 'bg-blue-400 cursor-wait' : 'bg-blue-600 hover:bg-blue-700'}`}
             >
-              Add Site Evidence
+              {uploading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                  Uploading...
+                </>
+              ) : (
+                'Add Site Evidence'
+              )}
             </button>
           </div>
         )}

@@ -17,7 +17,12 @@ CREATE POLICY "Public Uploads"
 ON storage.objects FOR INSERT
 WITH CHECK ( bucket_id = 'project-photos' );
 
--- 4. Allow public to update/delete (optional, required if deleting photos)
+-- 3b. Allow public to update files (REQUIRED for upload completion — Supabase uses multipart uploads internally)
+CREATE POLICY "Public Updates"
+ON storage.objects FOR UPDATE
+USING ( bucket_id = 'project-photos' );
+
+-- 4. Allow public to delete files (required if deleting photos)
 CREATE POLICY "Public Deletes"
 ON storage.objects FOR DELETE
 USING ( bucket_id = 'project-photos' );

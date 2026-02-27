@@ -106,10 +106,13 @@ export const projectService = {
   async uploadPhoto(file: File, projectId: string): Promise<string> {
     const fileExt = file.name.split('.').pop();
     const fileName = `${projectId}/${crypto.randomUUID()}.${fileExt}`;
+    console.log('[uploadPhoto] Uploading to bucket "project-photos":', fileName);
 
-    const { error: uploadError } = await supabase.storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
       .from('project-photos')
       .upload(fileName, file);
+
+    console.log('[uploadPhoto] Storage response:', { uploadData, uploadError });
 
     if (uploadError) throw uploadError;
 
@@ -117,6 +120,7 @@ export const projectService = {
       .from('project-photos')
       .getPublicUrl(fileName);
 
+    console.log('[uploadPhoto] Public URL:', data.publicUrl);
     return data.publicUrl;
   },
 
