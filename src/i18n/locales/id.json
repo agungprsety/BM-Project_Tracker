@@ -4,6 +4,7 @@
         "dashboard": "Dasbor",
         "newProject": "Proyek Baru",
         "signOut": "Keluar",
+        "users": "Pengguna",
         "switchToLight": "Mode Terang",
         "switchToDark": "Mode Gelap"
     },
@@ -64,7 +65,8 @@
         "btn": "Masuk",
         "back": "Kembali ke Beranda",
         "noAccount": "Belum punya akun?",
-        "registerLink": "Daftar di sini"
+        "registerLink": "Daftar di sini",
+        "notApproved": "Akun Anda menunggu persetujuan admin. Silakan hubungi administrator Anda."
     },
     "register": {
         "title": "Buat Akun Anda",
@@ -81,7 +83,12 @@
         "loginLink": "Masuk",
         "nicknameTooShort": "Nama panggilan harus minimal 3 karakter.",
         "passwordTooShort": "Kata sandi harus minimal 6 karakter.",
-        "nicknameTaken": "Nama panggilan ini sudah digunakan. Silakan pilih yang lain."
+        "nicknameTaken": "Nama panggilan ini sudah digunakan. Silakan pilih yang lain.",
+        "rateLimit": "Terlalu banyak permintaan. Silakan tunggu sebentar dan coba lagi.",
+        "successTitle": "Pendaftaran Terkirim!",
+        "successMessage": "Akun Anda telah berhasil dibuat. Administrator akan meninjau dan menyetujui pendaftaran Anda.",
+        "awaitApproval": "Anda akan diberitahu setelah akun Anda disetujui.",
+        "goToLogin": "Ke Halaman Masuk"
     },
     "dashboard": {
         "publicTitle": "Proyek Jalan Publik",
@@ -144,5 +151,21 @@
     "project": {
         "createdBy": "Dibuat oleh",
         "lastEditedBy": "Terakhir diedit oleh"
+    },
+    "pending": {
+        "title": "Akun Menunggu Persetujuan",
+        "message": "Akun Anda telah terdaftar tetapi belum disetujui. Administrator perlu meninjau dan menyetujui akun Anda sebelum Anda dapat mengakses dasbor.",
+        "hint": "Silakan hubungi administrator Anda jika membutuhkan akses segera.",
+        "signOut": "Keluar"
+    },
+    "admin": {
+        "title": "Manajemen Pengguna",
+        "subtitle": "Tinjau dan kelola pendaftaran pengguna",
+        "refresh": "Segarkan",
+        "pendingSection": "Menunggu Persetujuan",
+        "approvedSection": "Pengguna Disetujui",
+        "noApproved": "Belum ada pengguna yang disetujui.",
+        "approve": "Setujui",
+        "revoke": "Cabut"
     }
 }

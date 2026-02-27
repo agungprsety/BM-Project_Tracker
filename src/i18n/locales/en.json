@@ -4,6 +4,7 @@
         "dashboard": "Dashboard",
         "newProject": "New Project",
         "signOut": "Sign Out",
+        "users": "Users",
         "switchToLight": "Light Mode",
         "switchToDark": "Dark Mode"
     },
@@ -64,7 +65,8 @@
         "btn": "Sign In",
         "back": "Back to Home",
         "noAccount": "Don't have an account?",
-        "registerLink": "Register here"
+        "registerLink": "Register here",
+        "notApproved": "Your account is pending admin approval. Please contact your administrator."
     },
     "register": {
         "title": "Create Your Account",
@@ -81,7 +83,12 @@
         "loginLink": "Sign in",
         "nicknameTooShort": "Nickname must be at least 3 characters.",
         "passwordTooShort": "Password must be at least 6 characters.",
-        "nicknameTaken": "This nickname is already taken. Please choose another."
+        "nicknameTaken": "This nickname is already taken. Please choose another.",
+        "rateLimit": "Too many requests. Please wait a moment and try again.",
+        "successTitle": "Registration Submitted!",
+        "successMessage": "Your account has been created successfully. An administrator will review and approve your registration.",
+        "awaitApproval": "You will be notified once your account is approved.",
+        "goToLogin": "Go to Login"
     },
     "dashboard": {
         "publicTitle": "Public Road Projects",
@@ -144,5 +151,21 @@
     "project": {
         "createdBy": "Created by",
         "lastEditedBy": "Last edited by"
+    },
+    "pending": {
+        "title": "Account Pending Approval",
+        "message": "Your account has been registered but is not yet approved. An administrator needs to review and approve your account before you can access the dashboard.",
+        "hint": "Please contact your administrator if you need urgent access.",
+        "signOut": "Sign Out"
+    },
+    "admin": {
+        "title": "User Management",
+        "subtitle": "Review and manage user registrations",
+        "refresh": "Refresh",
+        "pendingSection": "Pending Approval",
+        "approvedSection": "Approved Users",
+        "noApproved": "No approved users yet.",
+        "approve": "Approve",
+        "revoke": "Revoke"
     }
 }

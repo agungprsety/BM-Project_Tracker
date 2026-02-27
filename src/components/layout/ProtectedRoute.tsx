@@ -2,7 +2,7 @@ import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function ProtectedRoute() {
-    const { user, loading } = useAuth();
+    const { user, isApproved, loading } = useAuth();
 
     if (loading) {
         return (
@@ -14,6 +14,10 @@ export default function ProtectedRoute() {
 
     if (!user) {
         return <Navigate to="/login" replace />;
+    }
+
+    if (!isApproved) {
+        return <Navigate to="/pending-approval" replace />;
     }
 
     return <Outlet />;

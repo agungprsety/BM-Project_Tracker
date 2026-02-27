@@ -16,6 +16,8 @@ const Dashboard = lazy(() => import('@/pages/Dashboard'));
 const ProjectForm = lazy(() => import('@/pages/ProjectForm'));
 const ProjectDetail = lazy(() => import('@/pages/ProjectDetail'));
 const ProjectView = lazy(() => import('@/pages/ProjectView'));
+const PendingApproval = lazy(() => import('@/pages/PendingApproval'));
+const UserManagement = lazy(() => import('@/pages/UserManagement'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -63,6 +65,7 @@ function App() {
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
                 <Route path="/view/:id" element={<ProjectView />} />
+                <Route path="/pending-approval" element={<PendingApproval />} />
 
                 {/* Protected routes — require login */}
                 <Route element={<ProtectedRoute />}>
@@ -70,6 +73,7 @@ function App() {
                   <Route path="/projects/new" element={<ProjectForm />} />
                   <Route path="/projects/:id" element={<ProjectDetail />} />
                   <Route path="/projects/:id/edit" element={<ProjectForm />} />
+                  <Route path="/admin/users" element={<UserManagement />} />
                 </Route>
               </Route>
             </Routes>

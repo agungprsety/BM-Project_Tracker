@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppStore } from '@/store';
 import { useTranslation } from 'react-i18next';
-import { UserPlus, AlertCircle } from 'lucide-react';
+import { UserPlus, AlertCircle, CheckCircle, Clock } from 'lucide-react';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
+import { supabase } from '@/lib/supabase';
 
 export default function Register() {
     const [nickname, setNickname] = useState('');
@@ -14,6 +15,7 @@ export default function Register() {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [success, setSuccess] = useState(false);
     const { signUp } = useAuth();
     const navigate = useNavigate();
     const { darkMode } = useAppStore();
@@ -34,20 +36,73 @@ export default function Register() {
         }
 
         setIsLoading(true);
+
+        // Pre-check nickname availability since Supabase auth masks trigger errors as "Database error saving new user"
+        const { data: existingUser } = await supabase
+            .from('profiles')
+            .select('nickname')
+            .eq('nickname', nickname)
+            .maybeSingle();
+
+        if (existingUser) {
+            setError(t('register.nicknameTaken'));
+            setIsLoading(false);
+            return;
+        }
+
         const { error } = await signUp(email, password, nickname);
 
         if (error) {
             // Detect common errors and show friendlier messages
-            if (error.message.includes('duplicate') || error.message.includes('unique')) {
+            if (error.message.includes('duplicate') || error.message.includes('unique') || error.message.includes('Database error saving new user')) {
                 setError(t('register.nicknameTaken'));
+            } else if (error.message.toLowerCase().includes('rate limit')) {
+                setError(t('register.rateLimit'));
             } else {
                 setError(error.message);
             }
             setIsLoading(false);
         } else {
-            navigate('/dashboard');
+            setIsLoading(false);
+            setSuccess(true);
         }
     };
+
+    if (success) {
+        return (
+            <div className="flex items-center justify-center min-h-[80vh] px-4">
+                <Card darkMode={darkMode} className="w-full max-w-md p-8 md:p-10 shadow-2xl text-center">
+                    <div className="flex justify-center mb-6">
+                        <div className={`p-4 rounded-full ${darkMode ? 'bg-green-900/30' : 'bg-green-50'}`}>
+                            <CheckCircle size={48} className={darkMode ? 'text-green-400' : 'text-green-500'} />
+                        </div>
+                    </div>
+                    <h1 className="text-2xl font-bold mb-3">{t('register.successTitle')}</h1>
+                    <p className={`text-sm mb-4 leading-relaxed ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                        {t('register.successMessage')}
+                    </p>
+                    <div className={`flex items-center gap-2 p-3 rounded-lg text-sm mb-6 ${darkMode ? 'bg-amber-900/30 text-amber-300 border border-amber-700/50' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
+                        <Clock size={16} className="flex-shrink-0" />
+                        <span>{t('register.awaitApproval')}</span>
+                    </div>
+                    <Button
+                        onClick={() => navigate('/login')}
+                        className="w-full h-11 text-base font-medium"
+                    >
+                        {t('register.goToLogin')}
+                    </Button>
+                    <div className="mt-4">
+                        <button
+                            onClick={() => navigate('/')}
+                            className={`text-sm ${darkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'} transition-colors`}
+                        >
+                            &larr; {t('login.back')}
+                        </button>
+                    </div>
+                </Card>
+            </div>
+        );
+    }
 
     return (
         <div className="flex items-center justify-center min-h-[80vh] px-4">

@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Moon, Sun, Plus, LogOut } from 'lucide-react';
+import { Moon, Sun, Plus, LogOut, Shield } from 'lucide-react';
 import { useAppStore } from '@/store';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
@@ -9,7 +9,7 @@ export default function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { darkMode, toggleDarkMode, language, setLanguage } = useAppStore();
-  const { user, signOut } = useAuth();
+  const { user, isAdmin, signOut } = useAuth();
   const { t, i18n } = useTranslation();
 
   useEffect(() => {
@@ -82,6 +82,18 @@ export default function Navbar() {
               >
                 <Plus size={18} /> {t('nav.newProject')}
               </Link>
+
+              {isAdmin && (
+                <Link
+                  to="/admin/users"
+                  className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${isActive('/admin/users')
+                    ? (darkMode ? 'bg-gray-700' : 'bg-blue-900')
+                    : (darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-blue-600 hover:bg-blue-700')
+                    }`}
+                >
+                  <Shield size={16} /> {t('nav.users')}
+                </Link>
+              )}
 
               <button
                 onClick={handleSignOut}

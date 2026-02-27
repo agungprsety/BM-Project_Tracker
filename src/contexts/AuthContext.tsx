@@ -6,6 +6,8 @@ interface AuthContextType {
     user: User | null;
     session: Session | null;
     nickname: string | null;
+    isApproved: boolean;
+    isAdmin: boolean;
     loading: boolean;
     signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
     signUp: (email: string, password: string, nickname: string) => Promise<{ error: Error | null }>;
@@ -21,11 +23,37 @@ function extractNickname(user: User | null): string | null {
     return user?.user_metadata?.nickname ?? null;
 }
 
+async function fetchProfileFlags(userId: string): Promise<{ isApproved: boolean; isAdmin: boolean }> {
+    const { data } = await supabase
+        .from('profiles')
+        .select('is_approved, is_admin')
+        .eq('id', userId)
+        .single();
+
+    return {
+        isApproved: data?.is_approved ?? false,
+        isAdmin: data?.is_admin ?? false,
+    };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [session, setSession] = useState<Session | null>(null);
     const [nickname, setNickname] = useState<string | null>(null);
+    const [isApproved, setIsApproved] = useState(false);
+    const [isAdmin, setIsAdmin] = useState(false);
     const [loading, setLoading] = useState(true);
+
+    const updateProfileFlags = async (currentUser: User | null) => {
+        if (currentUser) {
+            const flags = await fetchProfileFlags(currentUser.id);
+            setIsApproved(flags.isApproved);
+            setIsAdmin(flags.isAdmin);
+        } else {
+            setIsApproved(false);
+            setIsAdmin(false);
+        }
+    };
 
     useEffect(() => {
         if (!isSupabaseConfigured) {
@@ -34,10 +62,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         // Get initial session
-        supabase.auth.getSession().then(({ data: { session } }) => {
+        supabase.auth.getSession().then(async ({ data: { session } }) => {
             setSession(session);
-            setUser(session?.user ?? null);
-            setNickname(extractNickname(session?.user ?? null));
+            const currentUser = session?.user ?? null;
+            setUser(currentUser);
+            setNickname(extractNickname(currentUser));
+
+            if (currentUser) {
+                const flags = await fetchProfileFlags(currentUser.id);
+                setIsApproved(flags.isApproved);
+                setIsAdmin(flags.isAdmin);
+
+                // Trap unapproved sessions on fresh load
+                if (!flags.isApproved) {
+                    await supabase.auth.signOut();
+                }
+            } else {
+                setIsApproved(false);
+                setIsAdmin(false);
+            }
+
             setLoading(false);
         }).catch(() => {
             setLoading(false);
@@ -45,10 +89,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // Listen for auth changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
-            (_event, session) => {
+            async (_event, session) => {
                 setSession(session);
-                setUser(session?.user ?? null);
-                setNickname(extractNickname(session?.user ?? null));
+                const currentUser = session?.user ?? null;
+                setUser(currentUser);
+                setNickname(extractNickname(currentUser));
+
+                if (currentUser) {
+                    const flags = await fetchProfileFlags(currentUser.id);
+                    setIsApproved(flags.isApproved);
+                    setIsAdmin(flags.isAdmin);
+
+                    // Prevent auto-login for newly registered or unapproved users
+                    if (_event === 'SIGNED_IN' && !flags.isApproved) {
+                        await supabase.auth.signOut();
+                    }
+                } else {
+                    setIsApproved(false);
+                    setIsAdmin(false);
+                }
+
                 setLoading(false);
             }
         );
@@ -60,20 +120,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!isSupabaseConfigured) {
             return { error: new Error('Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file.') };
         }
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        return { error: error as Error | null };
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) return { error: error as Error | null };
+
+        // Check approval status
+        if (data.user) {
+            const flags = await fetchProfileFlags(data.user.id);
+            if (!flags.isApproved) {
+                await supabase.auth.signOut();
+                return { error: new Error('ACCOUNT_NOT_APPROVED') };
+            }
+            setIsApproved(flags.isApproved);
+            setIsAdmin(flags.isAdmin);
+        }
+
+        return { error: null };
     };
 
     const signUp = async (email: string, password: string, nickname: string) => {
         if (!isSupabaseConfigured) {
             return { error: new Error('Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file.') };
         }
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
             email,
             password,
             options: { data: { nickname } },
         });
-        return { error: error as Error | null };
+
+        if (error) return { error: error as Error | null };
+
+        // After signup, sign the user out so they can't access until approved
+        if (data.user) {
+            await supabase.auth.signOut();
+        }
+
+        return { error: null };
     };
 
     const signOut = async () => {
@@ -83,7 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     return (
-        <AuthContext.Provider value={{ user, session, nickname, loading, signIn, signUp, signOut }}>
+        <AuthContext.Provider value={{ user, session, nickname, isApproved, isAdmin, loading, signIn, signUp, signOut }}>
             {children}
         </AuthContext.Provider>
     );

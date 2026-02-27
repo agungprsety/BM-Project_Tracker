@@ -4,7 +4,8 @@ import { useAppStore } from '@/store';
 import { useProject, useUpdateProject, useDeleteProject } from '@/hooks/useProjects';
 import { calculateProgress, calculateBoQTotal, getCompletedByItem, formatCurrency, formatDate, formatLength, formatArea, generateId, getDeadlineInfo } from '@/lib/utils';
 import { exportProjectDetail } from '@/lib/exportPdf';
-import { MapPin, Edit2, Trash2, FileDown, ShieldCheck, User, History } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { MapPin, Edit2, Trash2, FileDown, ShieldCheck, User, History, Eye } from 'lucide-react';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import BoQ from '@/components/features/BoQ';
@@ -23,6 +24,7 @@ export default function ProjectDetail() {
   const { data: project, isLoading } = useProject(id);
   const updateMutation = useUpdateProject();
   const deleteMutation = useDeleteProject();
+  const { user, isAdmin } = useAuth();
   const [uploading, setUploading] = useState(false);
 
   if (isLoading) {
@@ -46,6 +48,9 @@ export default function ProjectDetail() {
 
   const boq = project.boq || [];
   const weeklyReports = project.weeklyReports || [];
+
+  const isCreator = user?.id === project.createdBy;
+  const isReadOnly = !isCreator && !isAdmin;
 
   const totalValue = calculateBoQTotal(boq);
   const progress = calculateProgress(boq, weeklyReports);
@@ -175,14 +180,33 @@ export default function ProjectDetail() {
             <Button variant="secondary" onClick={() => exportProjectDetail(project)}>
               <FileDown size={18} className="mr-2" /> Export PDF
             </Button>
-            <Button variant="secondary" onClick={() => navigate(`/projects/${project.id}/edit`)}>
-              <Edit2 size={18} className="mr-2" /> Edit
-            </Button>
-            <Button variant="danger" onClick={handleDelete} isLoading={deleteMutation.isPending}>
-              <Trash2 size={18} className="mr-2" /> Delete
-            </Button>
+            {!isReadOnly && (
+              <>
+                <Button variant="secondary" onClick={() => navigate(`/projects/${project.id}/edit`)}>
+                  <Edit2 size={18} className="mr-2" /> Edit
+                </Button>
+                <Button variant="danger" onClick={handleDelete} isLoading={deleteMutation.isPending}>
+                  <Trash2 size={18} className="mr-2" /> Delete
+                </Button>
+              </>
+            )}
           </div>
         </div>
+
+        {isReadOnly && (
+          <div className={`mb-6 p-4 rounded-xl border flex gap-3 items-start ${darkMode ? 'bg-blue-900/20 border-blue-800' : 'bg-blue-50 border-blue-200'}`}>
+            <div className={`p-2 rounded-lg shrink-0 ${darkMode ? 'bg-blue-900/50' : 'bg-blue-100'}`}>
+              <Eye size={20} className="text-blue-500" />
+            </div>
+            <div>
+              <h4 className={`font-semibold text-sm ${darkMode ? 'text-blue-400' : 'text-blue-800'}`}>Read-Only Mode</h4>
+              <p className={`text-sm mt-1 ${darkMode ? 'text-blue-200/70' : 'text-blue-700'}`}>
+                You are viewing this project in read-only mode because it was registered by another user (@{project.createdByNickname || 'system'}).
+                According to platform policy, only the original creator can edit, append reports, or delete project data.
+              </p>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
           <div className={`bg-gradient-to-br p-6 rounded-xl border ${cardBgClass}`}>
@@ -341,6 +365,7 @@ export default function ProjectDetail() {
         onDelete={handleDeletePhoto}
         onUpdateCaption={handleUpdateCaption}
         darkMode={darkMode}
+        readonly={isReadOnly}
         uploading={uploading}
       />
 
@@ -350,6 +375,7 @@ export default function ProjectDetail() {
         boq={boq}
         onUpdate={handleUpdateBoQ}
         darkMode={darkMode}
+        readonly={isReadOnly}
         completedMap={completedMap}
       />
 
@@ -362,6 +388,7 @@ export default function ProjectDetail() {
         contractStartDate={project.startDate}
         contractEndDate={project.endDate}
         darkMode={darkMode}
+        readonly={isReadOnly}
       />
 
       {/* S-Curve */}

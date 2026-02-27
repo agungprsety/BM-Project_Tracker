@@ -26,7 +26,11 @@ export default function Login() {
         const { error } = await signIn(email, password);
 
         if (error) {
-            setError(error.message);
+            if (error.message === 'ACCOUNT_NOT_APPROVED') {
+                setError(t('login.notApproved'));
+            } else {
+                setError(error.message);
+            }
             setIsLoading(false);
         } else {
             navigate('/dashboard');

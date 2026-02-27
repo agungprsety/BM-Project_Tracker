@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAppStore } from '@/store';
+import { useAuth } from '@/contexts/AuthContext';
 import { useProject, useCreateProject, useUpdateProject } from '@/hooks/useProjects';
 import { generateId } from '@/lib/utils';
 import { DISTRICTS } from '@/data/districts';
@@ -53,6 +54,7 @@ export default function ProjectForm() {
   const { data: existingProject } = useProject(id);
   const createMutation = useCreateProject();
   const updateMutation = useUpdateProject();
+  const { user, isAdmin } = useAuth();
 
   const [formData, setFormData] = useState<FormData>(initialData);
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
@@ -84,8 +86,15 @@ export default function ProjectForm() {
         subDistrict: existingProject.subDistrict || '',
       });
       setInitialized(true);
+
+      // Check authorization
+      const isCreator = user?.id === existingProject.createdBy;
+      if (!isCreator && !isAdmin) {
+        alert('Access Denied: You cannot edit a project registered by another user.');
+        navigate(`/projects/${id}`);
+      }
     }
-  }, [isEdit, existingProject, initialized]);
+  }, [isEdit, existingProject, initialized, user, isAdmin, id, navigate]);
 
   const validate = (): boolean => {
     const newErrors: Partial<Record<keyof FormData, string>> = {};
