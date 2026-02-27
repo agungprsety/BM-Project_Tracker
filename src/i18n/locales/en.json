@@ -118,6 +118,29 @@
         "noProjects": "No projects found matching your search",
         "emptyValue": "—"
     },
+    "deadline": {
+        "daysLeft": "{{days}}d left",
+        "overdue": "{{days}}d overdue",
+        "startsIn": "Starts in {{days}}d"
+    },
+    "staleness": {
+        "fresh": "Up to date",
+        "stale": "No update in {{days}} days",
+        "critical": "No update in {{days}} days",
+        "noReports": "No reports yet"
+    },
+    "activity": {
+        "title": "Project Activity Timeline",
+        "created": "Project created",
+        "updated": "Project details updated",
+        "report": "Weekly Report Week {{week}} submitted",
+        "reportPhoto": "Photo added to Week {{week}} report",
+        "photo": "Photo added to main gallery",
+        "photoCaption": "Photo added: \"{{caption}}\"",
+        "by": "by",
+        "showAll": "Show {{count}} older events",
+        "showLess": "Hide older events"
+    },
     "project": {
         "createdBy": "Created by",
         "lastEditedBy": "Last edited by"

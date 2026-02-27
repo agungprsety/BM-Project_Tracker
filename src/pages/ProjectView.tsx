@@ -11,6 +11,7 @@ import Weekly from '@/components/features/Weekly';
 import PhotoGallery from '@/components/features/PhotoGallery';
 import SCurve from '@/components/features/SCurve';
 import ProjectMap from '@/components/features/ProjectMap';
+import ActivityLog from '@/components/features/ActivityLog';
 
 export default function ProjectView() {
     const { id } = useParams<{ id: string }>();
@@ -270,6 +271,9 @@ export default function ProjectView() {
 
             {/* S-Curve */}
             <SCurve project={project} darkMode={darkMode} />
+
+            {/* Activity Log */}
+            <ActivityLog project={project} darkMode={darkMode} />
         </div>
     );
 }

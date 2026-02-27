@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { Project, BoQItem, WeeklyReport } from '@/types';
-import { formatCurrency, formatDate, formatLength, formatArea, calculateBoQTotal, getCompletedByItem, calculateProgress } from '@/lib/utils';
+import { formatCurrency, formatDate, formatLength, formatArea, calculateBoQTotal, getCompletedByItem, calculateProgress, getDeadlineInfo, getDaysSinceLastReport, getReportStaleness } from '@/lib/utils';
 
 // ── Shared helpers ────────────────────────────────────────────
 
@@ -17,34 +17,40 @@ const COLORS = {
 
 function addHeader(doc: jsPDF, title: string, subtitle?: string) {
     const pageWidth = doc.internal.pageSize.getWidth();
-
     // Blue header bar
-    doc.setFillColor(...COLORS.primary);
-    doc.rect(0, 0, pageWidth, 40, 'F');
+    doc.setFillColor(...COLORS.dark);
+    doc.rect(0, 0, pageWidth, 45, 'F');
 
     // Title
     doc.setTextColor(...COLORS.white);
-    doc.setFontSize(20);
+    doc.setFontSize(22);
     doc.setFont('helvetica', 'bold');
-    doc.text(title, 14, 18);
+    doc.text('EXECUTIVE PROJECT REPORT', 14, 20);
 
     // Subtitle
     if (subtitle) {
-        doc.setFontSize(10);
+        doc.setFontSize(11);
         doc.setFont('helvetica', 'normal');
+        doc.setTextColor(200, 200, 200);
         doc.text(subtitle, 14, 28);
     }
 
     // Date
     doc.setFontSize(9);
-    doc.text(`Generated: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`, 14, 36);
+    doc.setTextColor(150, 150, 150);
+    doc.text(`Generated: ${new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`, 14, 38);
 
     // Brand
-    doc.setFontSize(10);
+    doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
-    doc.text('SigiMarga', pageWidth - 14, 18, { align: 'right' });
+    doc.setTextColor(...COLORS.primary);
+    doc.text('SIGIMARGA', pageWidth - 14, 22, { align: 'right' });
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(150, 150, 150);
+    doc.text('CONFIDENTIAL INTERNAL', pageWidth - 14, 30, { align: 'right' });
 
-    return 48; // y position after header
+    return 55; // y position after header
 }
 
 function addFooter(doc: jsPDF) {
@@ -66,46 +72,91 @@ function addFooter(doc: jsPDF) {
 }
 
 function addSectionTitle(doc: jsPDF, title: string, y: number): number {
-    doc.setFontSize(13);
+    doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...COLORS.dark);
-    doc.text(title, 14, y);
+    doc.text(title.toUpperCase(), 14, y);
 
-    doc.setDrawColor(...COLORS.primary);
-    doc.setLineWidth(0.8);
-    doc.line(14, y + 2, 80, y + 2);
+    doc.setDrawColor(220, 220, 220); // Very light subtle line
+    doc.setLineWidth(0.5);
+    doc.line(14, y + 3, doc.internal.pageSize.getWidth() - 14, y + 3);
 
-    return y + 10;
+    return y + 12;
 }
 
-function addInfoRow(doc: jsPDF, label: string, value: string, x: number, y: number, labelWidth = 40): number {
+function addInfoRow(doc: jsPDF, label: string, value: string, x: number, y: number, labelWidth = 50): number {
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...COLORS.medium);
-    doc.text(label, x, y);
+    doc.text(label.toUpperCase(), x, y);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...COLORS.dark);
     doc.text(value || '-', x + labelWidth, y);
-    return y + 6;
+    return y + 7;
 }
 
-function addProgressBar(doc: jsPDF, x: number, y: number, width: number, progress: number) {
-    const barHeight = 6;
+function addProgressBar(doc: jsPDF, x: number, y: number, width: number, progress: number, progressStatus: string) {
+    const barHeight = 8;
     // Background
     doc.setFillColor(...COLORS.light);
-    doc.roundedRect(x, y, width, barHeight, 2, 2, 'F');
+    doc.roundedRect(x, y, width, barHeight, 4, 4, 'F');
+
     // Fill
     const fillWidth = Math.min(width, (progress / 100) * width);
     if (fillWidth > 0) {
-        doc.setFillColor(...COLORS.primary);
-        doc.roundedRect(x, y, fillWidth, barHeight, 2, 2, 'F');
+        const color = progressStatus === 'delayed' ? COLORS.amber
+            : progressStatus === 'at-risk' ? COLORS.amber
+                : COLORS.primary;
+        doc.setFillColor(...color);
+        doc.roundedRect(x, y, fillWidth, barHeight, 4, 4, 'F');
     }
-    // Label
-    doc.setFontSize(7);
+
+    // Label inside bar if wide enough, else outside
+    doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
+    if (fillWidth > 20) {
+        doc.setTextColor(...COLORS.white);
+        doc.text(`${progress.toFixed(1)}%`, x + fillWidth - 2, y + 6, { align: 'right' });
+    } else {
+        doc.setTextColor(...COLORS.dark);
+        doc.text(`${progress.toFixed(1)}%`, x + fillWidth + 2, y + 6);
+    }
+
+    // Ends markers
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...COLORS.medium);
+    doc.text('0%', x, y + barHeight + 4);
+    doc.text('100%', x + width, y + barHeight + 4, { align: 'right' });
+
+    return y + barHeight + 10;
+}
+
+function drawScorecard(doc: jsPDF, x: number, y: number, width: number, title: string, mainValue: string, subValue: string, badgeText: string, badgeColor: number[]) {
+    doc.setDrawColor(230, 230, 230);
+    doc.setFillColor(252, 252, 253);
+    doc.roundedRect(x, y, width, 25, 2, 2, 'FD');
+
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...COLORS.medium);
+    doc.text(title.toUpperCase(), x + 4, y + 6);
+
+    // Badge
+    doc.setFillColor(badgeColor[0], badgeColor[1], badgeColor[2]);
+    doc.roundedRect(x + width - 24, y + 3, 20, 5, 2, 2, 'F');
+    doc.setFontSize(6);
+    doc.setTextColor(...COLORS.white);
+    doc.text(badgeText.toUpperCase(), x + width - 14, y + 6.5, { align: 'center' });
+
+    doc.setFontSize(12);
     doc.setTextColor(...COLORS.dark);
-    doc.text(`${progress.toFixed(1)}%`, x + width + 4, y + 5);
-    return y + barHeight + 6;
+    doc.text(mainValue, x + 4, y + 16);
+
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...COLORS.medium);
+    doc.text(subValue, x + 4, y + 21);
 }
 
 // ── All Projects Summary ──────────────────────────────────────
@@ -209,6 +260,8 @@ export function exportProjectDetail(project: Project) {
     const pageWidth = doc.internal.pageSize.getWidth();
     const boq = project.boq || [];
     const weeklyReports = project.weeklyReports || [];
+
+    // Core Calculations
     const totalValue = calculateBoQTotal(boq);
     const completedMap = getCompletedByItem(weeklyReports);
     const progress = calculateProgress(boq, weeklyReports);
@@ -216,186 +269,161 @@ export function exportProjectDetail(project: Project) {
         const cq = Math.min(completedMap[i.id] || 0, i.quantity);
         return s + cq * i.unitPrice;
     }, 0);
+
+    // Schedule & Status Calculations
+    const contractSpan = (new Date(project.endDate).getTime() - new Date(project.startDate).getTime()) / (1000 * 60 * 60 * 24);
+    const elapsedDays = (new Date().getTime() - new Date(project.startDate).getTime()) / (1000 * 60 * 60 * 24);
+    const timeElapsedPct = contractSpan > 0 ? Math.max(0, Math.min(100, (elapsedDays / contractSpan) * 100)) : 0;
+
+    const isDelayed = progress < timeElapsedPct - 10;
+    const isAtRisk = progress < timeElapsedPct - 5 && progress >= timeElapsedPct - 10;
+    const progressStatus = isDelayed ? 'delayed' : isAtRisk ? 'at-risk' : progress > timeElapsedPct + 5 ? 'ahead' : 'on-track';
+    const progressColor = isDelayed ? COLORS.amber : isAtRisk ? COLORS.amber : COLORS.primary;
+
+    const deadlineInfo = getDeadlineInfo(project.startDate, project.endDate);
+    const daysSinceReport = getDaysSinceLastReport(weeklyReports);
+    const staleness = getReportStaleness(daysSinceReport, progress);
+
     const area = (project.length || 0) * (project.averageWidth || 0);
 
-    let y = addHeader(doc, project.name, `Project Detail Report`);
+    let y = addHeader(doc, project.name, `Project ID: ${project.id}`);
 
-    // ── Project Info ───────────────────────
-    y = addSectionTitle(doc, 'Project Information', y);
+    // ── EXECUTIVE SCORECARDS ───────────────────────
+    const cardW = (pageWidth - 28 - 6) / 3;
+
+    // Card 1: Schedule Health
+    drawScorecard(
+        doc, 14, y, cardW,
+        'Overall Health',
+        progressStatus.toUpperCase(),
+        `Deviation: ${(progress - timeElapsedPct).toFixed(1)}%`,
+        progressStatus,
+        progressColor
+    );
+
+    // Card 2: Financial Burn
+    drawScorecard(
+        doc, 14 + cardW + 3, y, cardW,
+        'Financial Burn',
+        `${((completedValue / totalValue) * 100 || 0).toFixed(1)}% Billed`,
+        `Rp ${(completedValue / 1000000).toFixed(1)}M of Rp ${(totalValue / 1000000).toFixed(1)}M`,
+        'AUDIT',
+        COLORS.medium
+    );
+
+    // Card 3: Compliance
+    drawScorecard(
+        doc, 14 + (cardW * 2) + 6, y, cardW,
+        'Report Compliance',
+        staleness === 'fresh' ? 'COMPLIANT' : 'NON-COMPLIANT',
+        daysSinceReport === Infinity ? 'No reports logged' : `Last update: ${daysSinceReport} days ago`,
+        staleness.toUpperCase(),
+        staleness === 'critical' ? COLORS.amber : staleness === 'stale' ? COLORS.amber : COLORS.green
+    );
+
+    y += 35;
+
+    // ── PROGRESS BAR ───────────────────────
+    y = addSectionTitle(doc, 'Progress Overview', y);
+    y = addProgressBar(doc, 14, y, pageWidth - 28, progress, progressStatus);
+
+    // Add time elapsed marker above the bar
+    doc.setFontSize(7);
+    doc.setTextColor(...COLORS.medium);
+    const timeX = 14 + ((timeElapsedPct / 100) * (pageWidth - 28));
+    if (timeX > 14 && timeX < pageWidth - 14) {
+        doc.text('Time Elapsed', timeX, y - 20, { align: 'center' });
+        doc.setDrawColor(200, 200, 200);
+        doc.line(timeX, y - 18, timeX, y - 10);
+    }
+
+    y += 4;
+
+    // ── PROJECT METADATA ───────────────────────
+    y = addSectionTitle(doc, 'Project Specifications', y);
 
     const col1x = 14;
-    const col2x = 110;
+    const col2x = pageWidth / 2 + 4;
     let y1 = y;
     let y2 = y;
 
-    y1 = addInfoRow(doc, 'Contractor:', project.contractor, col1x, y1);
-    y1 = addInfoRow(doc, 'Supervisor:', project.supervisor, col1x, y1);
-    y1 = addInfoRow(doc, 'Work Type:', project.workType?.replace('-', ' ') || '-', col1x, y1);
-    y1 = addInfoRow(doc, 'Road Hierarchy:', project.roadHierarchy || '-', col1x, y1);
-    y1 = addInfoRow(doc, 'Maintenance:', project.maintenanceType || '-', col1x, y1);
+    y1 = addInfoRow(doc, 'Contractor', project.contractor, col1x, y1);
+    y1 = addInfoRow(doc, 'Supervisor', project.supervisor, col1x, y1);
+    y1 = addInfoRow(doc, 'Work Type', project.workType?.replace('-', ' ') || '-', col1x, y1);
+    y1 = addInfoRow(doc, 'Road Class', project.roadHierarchy || '-', col1x, y1);
+    y1 = addInfoRow(doc, 'District', project.district || '-', col1x, y1);
 
-    y2 = addInfoRow(doc, 'Start Date:', formatDate(project.startDate), col2x, y2);
-    y2 = addInfoRow(doc, 'End Date:', formatDate(project.endDate), col2x, y2);
-    y2 = addInfoRow(doc, 'Length:', formatLength(project.length), col2x, y2);
-    y2 = addInfoRow(doc, 'Avg. Width:', project.averageWidth ? `${project.averageWidth} m` : '-', col2x, y2);
-    y2 = addInfoRow(doc, 'Area:', formatArea(area), col2x, y2);
-    if (project.district) y2 = addInfoRow(doc, 'District:', project.district, col2x, y2);
-    if (project.subDistrict) y2 = addInfoRow(doc, 'Sub-district:', project.subDistrict, col2x, y2);
+    y2 = addInfoRow(doc, 'Schedule', `${formatDate(project.startDate)} to ${formatDate(project.endDate)}`, col2x, y2);
+    y2 = addInfoRow(doc, 'Deadline', deadlineInfo.label, col2x, y2);
+    y2 = addInfoRow(doc, 'Length', formatLength(project.length), col2x, y2);
+    y2 = addInfoRow(doc, 'Width', project.averageWidth ? `${project.averageWidth} m` : '-', col2x, y2);
+    y2 = addInfoRow(doc, 'Area', formatArea(area), col2x, y2);
 
-    y = Math.max(y1, y2) + 4;
-
-    // ── Financial Summary ──────────────────
-    y = addSectionTitle(doc, 'Financial Summary', y);
-
-    const finData = [
-        ['Total Contract Value', formatCurrency(totalValue), COLORS.primary],
-        ['Completed Value', formatCurrency(completedValue), COLORS.green],
-        ['Remaining Value', formatCurrency(totalValue - completedValue), COLORS.amber],
-    ] as const;
-
-    finData.forEach(([label, value, color]) => {
-        doc.setFillColor(color[0], color[1], color[2]);
-        doc.roundedRect(14, y, 4, 8, 1, 1, 'F');
-
-        doc.setFontSize(9);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(...COLORS.medium);
-        doc.text(label, 22, y + 5);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(...COLORS.dark);
-        doc.text(value, pageWidth - 14, y + 5, { align: 'right' });
-        y += 10;
-    });
-
-    y += 2;
-
-    // Progress bar
-    y = addProgressBar(doc, 14, y, pageWidth - 58, progress);
-    y += 4;
+    y = Math.max(y1, y2) + 8;
 
     // ── BoQ Table ──────────────────────────
     if (boq.length > 0) {
-        y = addSectionTitle(doc, 'Bill of Quantities (BoQ)', y);
+        y = addSectionTitle(doc, 'Financial Allocation & BoQ', y);
 
-        const boqData = boq.map((item, i) => [
-            item.itemNumber,
+        const boqData = boq.map((item) => [
             item.description,
-            item.unit,
-            item.quantity.toLocaleString('id-ID'),
+            item.quantity.toLocaleString('id-ID') + ' ' + item.unit,
             `Rp ${item.unitPrice.toLocaleString('id-ID')}`,
             `Rp ${(item.quantity * item.unitPrice).toLocaleString('id-ID')}`,
         ]);
 
-        // Total row
-        boqData.push(['', '', '', '', 'TOTAL', formatCurrency(totalValue)]);
+        boqData.push(['CONTRACT TOTAL', '', '', formatCurrency(totalValue)]);
 
         autoTable(doc, {
             startY: y,
-            head: [['Item #', 'Description', 'Unit', 'Qty', 'Unit Price', 'Total']],
+            head: [['Description', 'Volume', 'Unit Rate', 'Total Amount']],
             body: boqData,
-            theme: 'grid',
+            theme: 'plain',
             headStyles: {
-                fillColor: COLORS.primary,
-                textColor: COLORS.white,
+                textColor: COLORS.medium,
                 fontStyle: 'bold',
                 fontSize: 8,
-                cellPadding: 3,
+                cellPadding: { top: 4, bottom: 4 },
+                lineColor: [220, 220, 220],
+                lineWidth: { bottom: 0.5 },
             },
             bodyStyles: {
                 fontSize: 8,
-                cellPadding: 2.5,
+                cellPadding: { top: 4, bottom: 4 },
                 textColor: COLORS.dark,
-            },
-            alternateRowStyles: {
-                fillColor: [248, 250, 252],
+                lineColor: [240, 240, 240],
+                lineWidth: { bottom: 0.1 },
             },
             columnStyles: {
-                0: { cellWidth: 18 },
-                1: { cellWidth: 55 },
-                2: { cellWidth: 15, halign: 'center' },
-                3: { halign: 'right' },
-                4: { halign: 'right' },
-                5: { halign: 'right' },
+                0: { cellWidth: 70 },
+                1: { halign: 'right' },
+                2: { halign: 'right' },
+                3: { halign: 'right', fontStyle: 'bold' },
             },
             margin: { left: 14, right: 14 },
             didParseCell: (data) => {
-                // Bold the total row
                 if (data.row.index === boqData.length - 1) {
                     data.cell.styles.fontStyle = 'bold';
-                    data.cell.styles.fillColor = COLORS.light;
+                    data.cell.styles.fillColor = [252, 252, 253];
                 }
             },
         });
 
-        y = (doc as any).lastAutoTable.finalY + 8;
+        y = (doc as any).lastAutoTable.finalY + 12;
     }
 
-    // ── Cumulative Progress ────────────────
-    if (boq.length > 0 && weeklyReports.length > 0) {
-        // Check if we need a new page
-        if (y > 220) {
-            doc.addPage();
-            y = 20;
-        }
-
-        y = addSectionTitle(doc, 'Cumulative Progress per Item', y);
-
-        const progressData = boq.map((item) => {
-            const completed = completedMap[item.id] || 0;
-            const pct = item.quantity > 0 ? Math.min(100, (completed / item.quantity) * 100) : 0;
-            return [
-                item.itemNumber,
-                item.description,
-                `${completed.toLocaleString('id-ID')} / ${item.quantity.toLocaleString('id-ID')}`,
-                item.unit,
-                `${pct.toFixed(1)}%`,
-            ];
-        });
-
-        autoTable(doc, {
-            startY: y,
-            head: [['Item #', 'Description', 'Completed / Contract', 'Unit', 'Progress']],
-            body: progressData,
-            theme: 'grid',
-            headStyles: {
-                fillColor: COLORS.primary,
-                textColor: COLORS.white,
-                fontStyle: 'bold',
-                fontSize: 8,
-                cellPadding: 3,
-            },
-            bodyStyles: {
-                fontSize: 8,
-                cellPadding: 2.5,
-                textColor: COLORS.dark,
-            },
-            alternateRowStyles: {
-                fillColor: [248, 250, 252],
-            },
-            columnStyles: {
-                0: { cellWidth: 18 },
-                1: { cellWidth: 60 },
-                2: { halign: 'right' },
-                3: { cellWidth: 15, halign: 'center' },
-                4: { halign: 'right' },
-            },
-            margin: { left: 14, right: 14 },
-        });
-
-        y = (doc as any).lastAutoTable.finalY + 8;
-    }
-
-    // ── Weekly Reports ─────────────────────
+    // ── Weekly Logs ─────────────────────
     if (weeklyReports.length > 0) {
         if (y > 220) {
             doc.addPage();
             y = 20;
         }
 
-        y = addSectionTitle(doc, 'Weekly Reports', y);
+        y = addSectionTitle(doc, 'Recent Activity Logs', y);
 
         const weeklyData = weeklyReports
-            .sort((a, b) => a.weekNumber - b.weekNumber)
+            .sort((a, b) => b.weekNumber - a.weekNumber) // Latest first for executive summaries
+            .slice(0, 10) // Show only last 10 weeks
             .map((report) => {
                 const weekValue = report.itemProgress?.reduce((s, ip) => {
                     const item = boq.find((b) => b.id === ip.boqItemId);
@@ -403,53 +431,43 @@ export function exportProjectDetail(project: Project) {
                 }, 0) || 0;
                 const weekPct = totalValue > 0 ? (weekValue / totalValue) * 100 : 0;
 
-                const itemDetails = report.itemProgress
-                    ?.map((ip) => {
-                        const item = boq.find((b) => b.id === ip.boqItemId);
-                        return item ? `${item.itemNumber}: ${ip.quantity} ${item.unit}` : '';
-                    })
-                    .filter(Boolean)
-                    .join(', ') || '-';
-
                 return [
-                    `Week ${report.weekNumber}`,
-                    `${formatDate(report.startDate)} - ${formatDate(report.endDate)}`,
-                    report.workDescription || '-',
-                    itemDetails,
+                    `W${report.weekNumber}`,
+                    `${formatDate(report.endDate)}`,
+                    report.workDescription || 'No description provided',
                     `+${weekPct.toFixed(1)}%`,
                 ];
             });
 
         autoTable(doc, {
             startY: y,
-            head: [['Week', 'Period', 'Description', 'Item Progress', '+%']],
+            head: [['Week', 'Date', 'Executive Summary', 'Growth']],
             body: weeklyData,
-            theme: 'grid',
+            theme: 'plain',
             headStyles: {
-                fillColor: COLORS.primary,
-                textColor: COLORS.white,
+                textColor: COLORS.medium,
                 fontStyle: 'bold',
                 fontSize: 8,
-                cellPadding: 3,
+                cellPadding: { top: 4, bottom: 4 },
+                lineColor: [220, 220, 220],
+                lineWidth: { bottom: 0.5 },
             },
             bodyStyles: {
-                fontSize: 7,
-                cellPadding: 2.5,
+                fontSize: 8,
+                cellPadding: { top: 4, bottom: 4 },
                 textColor: COLORS.dark,
-            },
-            alternateRowStyles: {
-                fillColor: [248, 250, 252],
+                lineColor: [240, 240, 240],
+                lineWidth: { bottom: 0.1 },
             },
             columnStyles: {
-                0: { cellWidth: 18 },
-                1: { cellWidth: 35 },
-                2: { cellWidth: 35 },
-                4: { cellWidth: 14, halign: 'right' },
+                0: { cellWidth: 15, fontStyle: 'bold' },
+                1: { cellWidth: 25 },
+                3: { cellWidth: 20, halign: 'right', textColor: COLORS.primary },
             },
             margin: { left: 14, right: 14 },
         });
     }
 
     addFooter(doc);
-    doc.save(`${project.name.replace(/[^a-zA-Z0-9]/g, '_')}_Report.pdf`);
+    doc.save(`${project.name.replace(/[^a-zA-Z0-9]/g, '_')}_Executive_Report.pdf`);
 }

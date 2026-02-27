@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '@/store';
 import { useProjects } from '@/hooks/useProjects';
-import { calculateProgress, calculateTimeProgress, getScheduleStatus, formatCurrency, formatLength } from '@/lib/utils';
+import { calculateProgress, calculateTimeProgress, getScheduleStatus, formatCurrency, formatLength, getDeadlineInfo, getDaysSinceLastReport, getReportStaleness } from '@/lib/utils';
 import { DISTRICTS } from '@/data/districts';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from 'recharts';
 import { MapPin, Search, ChevronLeft, ChevronRight, ArrowUpDown, Filter, Eye, Clock, AlertTriangle } from 'lucide-react';
@@ -42,11 +42,15 @@ export default function PublicDashboard() {
         projects.map((p) => {
             const physical = calculateProgress(p.boq || [], p.weeklyReports || []);
             const time = calculateTimeProgress(p.startDate, p.endDate);
+            const daysSince = getDaysSinceLastReport(p.weeklyReports || []);
             return {
                 ...p,
                 _progress: physical,
                 _timeProgress: time,
                 _status: getScheduleStatus(physical, time),
+                _deadline: getDeadlineInfo(p.startDate, p.endDate),
+                _daysSinceReport: daysSince,
+                _reportStaleness: getReportStaleness(daysSince, physical),
                 _value: p.boq?.reduce((s, i) => s + (i.quantity * i.unitPrice), 0) || 0,
             };
         }),
@@ -60,6 +64,7 @@ export default function PublicDashboard() {
         : 0;
     const totalLength = enriched.reduce((s, p) => s + (p.length || 0), 0);
     const delayedCount = enriched.filter(p => p._status === 'delayed' || p._status === 'at-risk').length;
+    const staleCount = enriched.filter(p => (p as any)._reportStaleness !== 'fresh').length;
 
     // Filtered projects (excluding bucket filter) - for the chart
     const projectsForChart = useMemo(() => {
@@ -215,6 +220,11 @@ export default function PublicDashboard() {
                             <p className={`text-2xl font-bold ${delayedCount > 0 ? 'text-red-600' : 'text-green-600'}`}>
                                 {delayedCount} At Risk
                             </p>
+                            {staleCount > 0 && (
+                                <p className={`text-sm font-medium pt-1 mt-1 border-t ${darkMode ? 'border-gray-700' : 'border-gray-100'} ${staleCount > 0 ? 'text-amber-500' : 'text-green-600'}`}>
+                                    {staleCount} Stale Reports
+                                </p>
+                            )}
                         </div>
                         <div className={`p-2 rounded-lg ${delayedCount > 0 ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
                             <AlertTriangle size={20} />
@@ -376,6 +386,17 @@ export default function PublicDashboard() {
                                             <tr key={project.id} className={`border-t ${darkMode ? 'border-gray-700 hover:bg-gray-700' : 'border-gray-200 hover:bg-gray-50'} transition-colors`}>
                                                 <td className="px-3 py-3">
                                                     <div className="font-medium">{project.name}</div>
+                                                    {project.location && (
+                                                        <a
+                                                            href={`https://www.google.com/maps/search/?api=1&query=${project.location[0]},${project.location[1]}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className={`inline-flex items-center text-[10px] sm:text-xs mt-1 px-1.5 py-0.5 rounded transition-colors w-fit ${darkMode ? 'text-blue-400 bg-blue-900/20 hover:bg-blue-900/40' : 'text-blue-600 bg-blue-50 hover:bg-blue-100'}`}
+                                                        >
+                                                            <MapPin size={10} className="mr-0.5" />
+                                                            <span className="font-medium">Map</span>
+                                                        </a>
+                                                    )}
                                                 </td>
                                                 <td className="px-3 py-3 text-sm">{project.district || '-'}</td>
                                                 <td className="px-3 py-3 text-sm">{project.averageWidth ? `${project.averageWidth} m` : '-'}</td>
@@ -390,14 +411,30 @@ export default function PublicDashboard() {
                                                     </div>
                                                 </td>
                                                 <td className="px-3 py-3">
-                                                    <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                                                        project._status === 'delayed' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
-                                                        project._status === 'at-risk' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
-                                                        project._status === 'ahead' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                                                        'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                                                    }`}>
-                                                        {project._status === 'delayed' || project._status === 'at-risk' ? <AlertTriangle size={10} /> : <Clock size={10} />}
-                                                        {project._status.replace('-', ' ')}
+                                                    <div className="flex flex-col items-start gap-1">
+                                                        <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${project._status === 'delayed' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                                                            project._status === 'at-risk' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
+                                                                project._status === 'ahead' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                                                                    'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                                            }`}>
+                                                            {project._status === 'delayed' || project._status === 'at-risk' ? <AlertTriangle size={10} className="shrink-0" /> : <Clock size={10} className="shrink-0" />}
+                                                            {project._status.replace('-', ' ')}
+                                                        </div>
+                                                        <span className={`text-[11px] font-medium mt-0.5 whitespace-nowrap ${project._deadline.status === 'overdue' ? 'text-red-500' :
+                                                            project._deadline.status === 'ending-soon' ? 'text-amber-500' :
+                                                                darkMode ? 'text-gray-400' : 'text-gray-500'
+                                                            }`}>
+                                                            {project._deadline.label}
+                                                        </span>
+                                                        {(project as any)._reportStaleness !== 'fresh' && (
+                                                            <div className={`mt-1 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider whitespace-nowrap ${(project as any)._reportStaleness === 'critical'
+                                                                ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                                                                : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                                                                }`}>
+                                                                <AlertTriangle size={10} className="shrink-0" />
+                                                                {(project as any)._daysSinceReport === Infinity ? t('staleness.noReports') : ((project as any)._reportStaleness === 'critical' ? t('staleness.critical', { days: (project as any)._daysSinceReport }) : t('staleness.stale', { days: (project as any)._daysSinceReport }))}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </td>
                                                 <td className="px-3 py-3">

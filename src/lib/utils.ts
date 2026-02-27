@@ -125,3 +125,82 @@ export const getScheduleStatus = (physicalProgress: number, timeProgress: number
   if (slippage > 5) return 'ahead';
   return 'on-track';
 };
+
+export interface DeadlineInfo {
+  daysRemaining: number;
+  status: 'upcoming' | 'active' | 'ending-soon' | 'overdue';
+  label: string;
+}
+
+export const getDeadlineInfo = (startDate: string, endDate: string): DeadlineInfo => {
+  const now = Date.now();
+  const start = new Date(startDate).getTime();
+  const end = new Date(endDate).getTime();
+
+  if (isNaN(start) || isNaN(end)) {
+    return { daysRemaining: 0, status: 'active', label: '—' };
+  }
+
+  if (now < start) {
+    const days = Math.ceil((start - now) / 86400000);
+    return { daysRemaining: days, status: 'upcoming', label: `Starts in ${days}d` };
+  }
+
+  const daysLeft = Math.ceil((end - now) / 86400000);
+
+  if (daysLeft < 0) {
+    return { daysRemaining: daysLeft, status: 'overdue', label: `${Math.abs(daysLeft)}d overdue` };
+  }
+  if (daysLeft <= 14) {
+    return { daysRemaining: daysLeft, status: 'ending-soon', label: `${daysLeft}d left` };
+  }
+  return { daysRemaining: daysLeft, status: 'active', label: `${daysLeft}d left` };
+};
+
+/**
+ * Returns the number of days since the last weekly report was submitted.
+ * Returns Infinity if there are no reports yet (project has no updates).
+ */
+export const getDaysSinceLastReport = (weeklyReports: { createdAt?: string; endDate: string }[]): number => {
+  if (!weeklyReports || weeklyReports.length === 0) return Infinity;
+
+  const latestDate = weeklyReports.reduce((latest, r) => {
+    const d = new Date(r.createdAt || r.endDate).getTime();
+    return d > latest ? d : latest;
+  }, 0);
+
+  const now = Date.now();
+  return Math.floor((now - latestDate) / (1000 * 60 * 60 * 24));
+};
+
+/**
+ * Returns staleness status based on days since last report.
+ */
+export const getReportStaleness = (
+  daysSince: number,
+  progress: number
+): 'fresh' | 'stale' | 'critical' => {
+  if (progress >= 100) return 'fresh';  // Completed projects don't count
+  if (daysSince >= 14) return 'critical';
+  if (daysSince >= 7) return 'stale';
+  return 'fresh';
+};
+
+export const getRelativeTime = (dateString: string): string => {
+  const now = Date.now();
+  const then = new Date(dateString).getTime();
+  const diffMs = now - then;
+
+  if (isNaN(then) || diffMs < 0) return formatDate(dateString);
+
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+  return formatDate(dateString);
+};

@@ -11,9 +11,10 @@ interface BoQProps {
   onUpdate: (boq: BoQItem[]) => void;
   darkMode?: boolean;
   readonly?: boolean;
+  completedMap?: Record<string, number>;
 }
 
-export default function BoQ({ projectId, boq = [], onUpdate, darkMode = false, readonly = false }: BoQProps) {
+export default function BoQ({ projectId, boq = [], onUpdate, darkMode = false, readonly = false, completedMap }: BoQProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [newItem, setNewItem] = useState({
     itemNumber: '',
@@ -75,6 +76,7 @@ export default function BoQ({ projectId, boq = [], onUpdate, darkMode = false, r
                   <th className="px-3 py-2 text-right">Qty</th>
                   <th className="px-3 py-2 text-right">Unit Price</th>
                   <th className="px-3 py-2 text-right">Total</th>
+                  {completedMap && <th className="px-3 py-2 min-w-[120px]">Progress</th>}
                   {!readonly && <th className="px-3 py-2"></th>}
                 </tr>
               </thead>
@@ -87,6 +89,41 @@ export default function BoQ({ projectId, boq = [], onUpdate, darkMode = false, r
                     <td className="px-3 py-2 text-right">{item.quantity.toLocaleString('id-ID')}</td>
                     <td className="px-3 py-2 text-right">Rp {item.unitPrice.toLocaleString('id-ID')}</td>
                     <td className="px-3 py-2 text-right font-medium">Rp {(item.quantity * item.unitPrice).toLocaleString('id-ID')}</td>
+                    {completedMap && (
+                      <td className="px-3 py-2">
+                        {(() => {
+                          const completed = completedMap[item.id] || 0;
+                          const pct = item.quantity > 0 ? (completed / item.quantity) * 100 : 0;
+                          const cappedPct = Math.min(100, pct);
+                          const isComplete = pct >= 100;
+
+                          const colorClass =
+                            pct >= 75 ? 'bg-green-500' :
+                              pct >= 50 ? 'bg-blue-500' :
+                                pct >= 25 ? 'bg-amber-500' :
+                                  'bg-red-500';
+
+                          return (
+                            <div className="flex flex-col gap-1">
+                              <div className="flex justify-between items-center text-xs">
+                                <span className={darkMode ? 'text-gray-400' : 'text-gray-500'}>
+                                  {completed.toLocaleString('id-ID')} / {item.quantity.toLocaleString('id-ID')}
+                                </span>
+                                <span className={`font-medium ${isComplete ? 'text-green-500' : ''}`}>
+                                  {pct.toFixed(1)}%
+                                </span>
+                              </div>
+                              <div className={`w-full h-1.5 rounded-full ${darkMode ? 'bg-gray-600' : 'bg-gray-200'} overflow-hidden`}>
+                                <div
+                                  className={`h-full rounded-full transition-all ${colorClass}`}
+                                  style={{ width: `${cappedPct}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </td>
+                    )}
                     {!readonly && (
                       <td className="px-3 py-2">
                         <button

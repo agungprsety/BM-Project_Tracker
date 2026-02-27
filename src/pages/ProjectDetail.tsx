@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppStore } from '@/store';
 import { useProject, useUpdateProject, useDeleteProject } from '@/hooks/useProjects';
-import { calculateProgress, calculateBoQTotal, getCompletedByItem, formatCurrency, formatDate, formatLength, formatArea, generateId } from '@/lib/utils';
+import { calculateProgress, calculateBoQTotal, getCompletedByItem, formatCurrency, formatDate, formatLength, formatArea, generateId, getDeadlineInfo } from '@/lib/utils';
 import { exportProjectDetail } from '@/lib/exportPdf';
 import { MapPin, Edit2, Trash2, FileDown, ShieldCheck, User, History } from 'lucide-react';
 import Card from '@/components/ui/Card';
@@ -11,6 +11,7 @@ import Weekly from '@/components/features/Weekly';
 import PhotoGallery from '@/components/features/PhotoGallery';
 import SCurve from '@/components/features/SCurve';
 import ProjectMap from '@/components/features/ProjectMap';
+import ActivityLog from '@/components/features/ActivityLog';
 import type { Photo, BoQItem, WeeklyReport } from '@/types';
 
 export default function ProjectDetail() {
@@ -52,6 +53,7 @@ export default function ProjectDetail() {
     return s + completedQty * i.unitPrice;
   }, 0);
   const area = (project.length || 0) * (project.averageWidth || 0);
+  const deadline = getDeadlineInfo(project.startDate, project.endDate);
 
   const handleUpdateBoQ = (boq: BoQItem[]) => {
     updateMutation.mutate({ id: project.id, updates: { boq } });
@@ -166,6 +168,15 @@ export default function ProjectDetail() {
                 <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Dates:</span>
                 <span className="font-medium">
                   {formatDate(project.startDate)} - {formatDate(project.endDate)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Deadline:</span>
+                <span className={`font-bold ${deadline.status === 'overdue' ? 'text-red-600' :
+                  deadline.status === 'ending-soon' ? 'text-amber-600' :
+                    darkMode ? 'text-gray-300' : 'text-gray-700'
+                  }`}>
+                  {deadline.label}
                 </span>
               </div>
               <div className="flex justify-between">
@@ -306,6 +317,7 @@ export default function ProjectDetail() {
         boq={boq}
         onUpdate={handleUpdateBoQ}
         darkMode={darkMode}
+        completedMap={completedMap}
       />
 
       {/* Weekly Reports */}
@@ -321,6 +333,9 @@ export default function ProjectDetail() {
 
       {/* S-Curve */}
       <SCurve project={project} darkMode={darkMode} />
+
+      {/* Activity Log */}
+      <ActivityLog project={project} darkMode={darkMode} />
     </div>
   );
 }

@@ -118,6 +118,29 @@
         "noProjects": "Tidak ada proyek yang sesuai dengan pencarian Anda",
         "emptyValue": "—"
     },
+    "deadline": {
+        "daysLeft": "Sisa {{days}} hri",
+        "overdue": "Lewat {{days}} hri",
+        "startsIn": "Mulai dlm {{days}} hri"
+    },
+    "staleness": {
+        "fresh": "Terkini",
+        "stale": "Tdk ada update slm {{days}} hari",
+        "critical": "Tdk ada update slm {{days}} hari",
+        "noReports": "Belum ada laporan"
+    },
+    "activity": {
+        "title": "Linimasa Aktivitas Proyek",
+        "created": "Proyek dibuat",
+        "updated": "Detail proyek diperbarui",
+        "report": "Laporan Mingguan Minggu {{week}} dikirim",
+        "reportPhoto": "Foto ditambahkan ke laporan Minggu {{week}}",
+        "photo": "Foto ditambahkan ke galeri utama",
+        "photoCaption": "Foto ditambahkan: \"{{caption}}\"",
+        "by": "oleh",
+        "showAll": "Tampilkan {{count}} aktivitas lama",
+        "showLess": "Sembunyikan aktivitas lama"
+    },
     "project": {
         "createdBy": "Dibuat oleh",
         "lastEditedBy": "Terakhir diedit oleh"
